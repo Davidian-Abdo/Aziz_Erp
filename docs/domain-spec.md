@@ -3,8 +3,12 @@
 Mini ERP for a single grocery store. Defines the business logic, data meaning,
 and every computation the application performs.
 
-Status: **draft for validation**. Open questions are marked **[Q]**.
-Companion document: `architecture-spec.md`.
+Status: **approved for build.** Amended 2026-08-02 to match `v1.0_impl_plan.md`
+§2 and the findings in `plan_review.md`; all six open questions are answered
+(§11). Companion documents: `architecture-spec.md`, `v1.0_impl_plan.md`.
+
+Where this document and the plan disagree, **the plan is normative** — and any
+such disagreement is a defect to be fixed here.
 
 ---
 
@@ -84,6 +88,14 @@ Stated plainly, because the UI must not hide it:
 4. **Nothing can be attributed after the last count.** Purchases made after the
    most recent count are recorded, but the goods they bought have no known fate
    until the next count.
+5. **A count is only as good as the shelf the user had in mind.** A category is a
+   basket; a delivery is usually one product in it. Asked *"what was left before
+   this delivery?"* while holding a crate of milk, a user naturally answers for
+   the milk — and the system reads it as the whole Dairy shelf, booking the
+   cheese still physically present as sold at full markup. The next count then
+   shows stock rising for no reason, which is flagged as an anomaly, but the
+   false profit already sits in a closed month. §3.2 carries three mitigations;
+   none of them eliminates this, and the UI says so rather than hiding it.
 
 Design consequences, binding on the UI:
 
@@ -103,6 +115,7 @@ markup. It is the unit of stock, purchasing, counting, loss and margin.
 | Field | Meaning |
 |---|---|
 | `name` | Display name, unique |
+| `description` | Contents hint — *"lait, fromage, yaourt, beurre"*. Shown in the count question (§3.2) so the user knows which shelf is being asked about |
 | `active` | Inactive categories are hidden from entry forms but retained in history |
 | `sort_order` | Display order in forms and tables |
 
@@ -139,9 +152,9 @@ feel to a plain field. Versioning is invisible unless the user opens "rate
 history". Changing a rate warns: *"applies from {date} forward; earlier reports
 keep the old rate."*
 
-**[Q1]** Should editing a markup default `effective_from` to *today*, or to the
-*start of the current month*? Today is more literal; start-of-month avoids
-splitting the current month across two rates.
+**Resolved (Q1):** editing a markup defaults `effective_from` to **today**. It is
+the literal reading, and the date remains editable in the rate-history dialog for
+anyone who would rather not split the current month across two rates.
 
 ---
 
@@ -164,16 +177,56 @@ valued at buying price."* It is the only measurement of stock in the system.
 ### 3.2 Two ways a count is created
 
 **A. Embedded in a purchase (the primary path).**
-When recording a purchase, before submitting, the form asks:
-
-> *Before this delivery, was the previous stock of {category} finished, or is
-> some left?*
-> — `Finished (empty)` → records a count of 0
-> — `Some remains` → numeric input: *"how much is left, at buying price?"*
-
-This is **required**. It is the mechanism that keeps the timeline settled. The
-count it produces is timestamped **immediately before** the purchase it belongs
+When recording a purchase, before submitting, the form asks the stock question.
+The count it produces is ordered **immediately before** the purchase it belongs
 to (see §3.4).
+
+This is the mechanism that keeps the timeline settled, and it is **required
+whenever the purchase is the category's newest event** — see the backdating
+exception below.
+
+**The question must name the whole shelf, and list what is on it.** This is the
+only defence against limitation 5 of §1.4, and the wording is binding:
+
+> **Tout le rayon Produits laitiers** — lait, fromage, yaourt, beurre.
+> Pas seulement ce que vous venez d'acheter.
+> Combien restait-il, au prix d'achat ?
+> — `Rien, le rayon était vide` → records a count of 0
+> — `Il restait quelque chose` → numeric input
+
+The contents list comes from `article_category.description` (§2.1), seeded per
+category and editable in settings. How well it matches the actual shelves
+directly determines how often this trap can be sprung.
+
+**A plausibility check runs before save.** The system compares the entered value
+against what could possibly be on the shelf and warns on four verdicts:
+
+| Verdict | Condition | Reading |
+|---|---|---|
+| `exceeds_bound` | value > maximum possible on hand (§6.8) | more stock than could possibly be there — a purchase is missing, or the value is wrong |
+| `high_outflow` | ≥ 2 settled windows exist, and implied outflow per day > 3 × the category's trailing-90-day average | an unusually large drop for the days elapsed |
+| `suspicious_drop` | no history yet, value < 0.25 × bound, and fewer than 7 days since the last count | counted much lower than expected after only a few days |
+| `ok` | otherwise | — |
+
+A non-`ok` verdict shows a blocking confirmation — *"Vous avez saisi 50, mais
+Produits laitiers devrait contenir environ 1 000. Est-ce correct ?"* — with
+**Corriger** as the primary action. It **never prevents saving**: these are
+heuristics, and the user may simply be right.
+
+**Backdating exception.** The embedded count is required only when the purchase
+is the category's newest event. A purchase dated **strictly before** the
+category's last count is recorded with **no count attached**; it becomes inflow
+inside whichever existing window contains it, and the form explains: *"Cet achat
+est antérieur au dernier inventaire de ce rayon ; aucun comptage ne sera
+enregistré."*
+
+A purchase dated **on the same date as** the last count still carries its
+embedded count. This is deliberate and not an edge case to trim: by §3.4 rule 3 a
+standalone count sorts *after* all purchases of its date, so a delivery arriving
+in the afternoon of a morning sweep would otherwise be ordered *before* that
+sweep — dumping the whole delivery into the window that just closed and booking
+it as sold at full markup on the day it arrived. Keeping the embedded count gives
+the coherent order *embedded count → purchase → standalone count*.
 
 **B. Standalone count (any date, no purchase).**
 A dedicated screen to count one category or sweep all of them in a single pass.
@@ -200,9 +253,30 @@ Multiple events can share one date. Ordering is deterministic and binding:
 3. Within a date: a **standalone count** is ordered **after** all purchases and
    losses of that same date (a physical count reflects everything that already
    happened that day).
-4. Remaining ties break by `created_at`, then `id`.
+4. Within a date: a **loss** sorts among purchases and embedded counts by
+   `created_at`, i.e. by the order it was typed — and never *between* an embedded
+   count and its own purchase, which are an indivisible pair.
+5. Remaining ties break by `created_at`, then `id`.
 
-This rule must be implemented explicitly, not left to insertion order.
+This rule must be implemented explicitly, not left to insertion order. It yields
+a strict per-category sequence, and it is that **rank**, not the date, that
+defines window boundaries (§6.2).
+
+### 3.5 Opening the books
+
+On day one the shop is full of stock and the database is empty. Every window
+needs an opening count, and nothing else in this document creates the first one.
+
+Until onboarding completes, the app opens on a mandatory **opening sweep**: every
+active category, one value each at buying price, dated today, written as
+standalone counts in a single transaction. It is the §8.3 sweep screen with
+different copy. **The dashboard is not reachable until it completes** — a
+dashboard with no opening counts shows nothing but zeros and unsettled spans, and
+would teach the owner on their first visit that the app does not work.
+
+Categories may be deactivated during the sweep, so nobody is forced to invent a
+number for a shelf they do not stock. Completion is recorded once
+(`app_settings.onboarded_at`) and the gate never appears again.
 
 ---
 
@@ -294,9 +368,10 @@ any category, including seeded ones.
 
 System categories cannot be deleted, only deactivated.
 
-**[Q2]** *Special event spending* is defaulted to `owner_draw`, read as
-weddings / Aid / family occasions. If it means shop promotions or store events,
-it should be `operating`. Confirm.
+**Resolved (Q2):** *Special event spending* is **`owner_draw`**, read as
+weddings / Aid / family occasions. If the owner later means shop promotions by
+it, `nature` is editable on any category — including this one — so the correction
+costs nothing.
 
 ---
 
@@ -328,32 +403,85 @@ For each category, take its counts ordered per §3.4: `C₀ … Cₙ` at dates
 
 Each consecutive pair forms a **count window** `Wₖ = [tₖ, tₖ₊₁]`:
 
+Boundaries are **rank-exclusive at both ends**. Writing `rₖ` for the event rank
+of count `Cₖ`, window `Wₖ` contains exactly the events with:
+
 ```
-inflowₖ   = Σ purchases with tₖ < event_order ≤ tₖ₊₁
-lossesₖ   = Σ losses    with tₖ < event_order ≤ tₖ₊₁
+rₖ < evt_rank < rₖ₊₁
+```
+
+The event at `rₖ₊₁` *is* the closing count and belongs to no window's interior.
+Only ranks are normative here — any date-based phrasing of this rule is wrong,
+because several events can share one date.
+
+```
+inflowₖ   = Σ purchases with rₖ < evt_rank < rₖ₊₁
+lossesₖ   = Σ losses    with rₖ < evt_rank < rₖ₊₁
 
 outflowₖ      = Vₖ + inflowₖ − Vₖ₊₁
 goods_soldₖ   = outflowₖ − lossesₖ
 ```
 
-Boundaries use the §3.4 event ordering, not raw dates.
+**Anomalies.** There are three kinds, with different causes and different fixes.
+A window matching any of them is **flagged, excluded from the profit chain, and
+its days do not count as settled** (§6.5). None is ever silently clamped to zero.
 
-**Anomaly:** `goods_soldₖ < 0` means the closing count exceeds what could
-possibly be present — a data error (mistyped count, missing purchase, wrong
-date). The window is flagged, excluded from profit, and surfaced in the data
-quality panel (§6.5). It is never silently clamped to zero.
+| Kind | Condition | What it means |
+|---|---|---|
+| `negative_outflow` | `outflowₖ < 0` | the closing count exceeds opening plus purchases — a mistyped count, a missing purchase, or a wrong date |
+| `losses_exceed_outflow` | `outflowₖ ≥ 0` and `goods_soldₖ < 0` | declared losses exceed everything that left the shelf — a double-entered or overstated loss |
+| `no_markup` | the category has no `markup_rate` row at all | nothing to value the sale with; see §2.3 |
+
+Excluding an anomalous window from settled days is essential and easy to miss:
+without it, a period full of data errors reports full coverage while contributing
+no profit — exactly inverted from the truth.
 
 ### 6.3 Allocating a window to a requested period
 
 A count window rarely aligns with the requested `[A, B]`. Allocation is
-**straight-line by days**:
+**straight-line by days**.
+
+**Day arithmetic is half-open.** Count windows are `[open_on, close_on)`: the
+opening count's date belongs to the window it opens, and the closing count's date
+belongs to the *next* window. That partitions time cleanly with no day counted
+twice. But the requested period `[A, B]` is inclusive of `B` (§9.1), so the two
+must be reconciled before any subtraction. Convert the period to half-open
+`[A, B_eff + 1)` and do all day arithmetic there:
 
 ```
-overlap_days = days( [tₖ, tₖ₊₁] ∩ [A, B] )
-window_days  = days( [tₖ, tₖ₊₁] )                    (minimum 1)
+B_eff        = least(B, store_today())            -- see below
+window_days  = greatest(close_on − open_on, 1)
+overlap_days = greatest(0, least(close_on, B_eff + 1) − greatest(open_on, A))
+period_days  = (B_eff − A) + 1
 
 allocated_goods_sold = goods_soldₖ × overlap_days / window_days
 ```
+
+**Zero-length windows.** Two counts can fall on the same date — two purchases of
+one category in a day, or a purchase followed by a month-end sweep. Then
+`close_on − open_on = 0`, and the formula above yields `overlap_days = 0` while
+`window_days` floors to 1, so the window's goods sold would be multiplied by zero
+and **silently vanish from every report**. That money is real. A zero-length
+window is a point in time, not a span, and is allocated whole:
+
+```
+overlap_days = 1  if  close_on = open_on  and  A ≤ open_on ≤ B_eff
+             = 0  if  close_on = open_on  and  otherwise
+```
+
+Its single settled day is correct for coverage too: that day is settled at both
+ends.
+
+**The period end is clamped to today.** "This month", selected on the 3rd, yields
+`B` = the 31st. Without clamping, twenty-eight days that have not happened yet
+count as unsettled, and a perfectly well-kept shop reads *"Low — these figures are
+largely unsettled"* for most of every month. Everywhere a period is evaluated —
+allocation, coverage, freshness, the unsettled-tail message — the effective end
+is `B_eff = least(B, store_today())`. The label shown to the user still reads the
+requested range, noting the effective end when it differs: *"1–31 August (arrêté
+au 3 août)"*.
+
+`store_today()` is the date in the **store's own timezone** (§9.1), not UTC.
 
 This is an **allocation**, not a measurement — the dashboard says so. Consumption
 is assumed even across the window, which is wrong for seasonal or bursty
@@ -362,10 +490,10 @@ categories but is the standard, defensible approximation.
 The markup applied is the rate in force at `tₖ` (§2.3). A window spanning a rate
 change uses the rate at its start.
 
-**[Q3]** Alternative: instead of prorating, **snap** `[A, B]` outward to the
-nearest enclosing counts and report the true window, displaying the effective
-period. More truthful, but the reported period stops matching the one requested.
-Prorating is the default; snapping could be a toggle. Preference?
+**Resolved (Q3):** **prorate**, as described above. The alternative — snapping
+`[A, B]` outward to the nearest enclosing counts and reporting the true window —
+is more truthful but stops the reported period matching the one requested. It is
+**not built in v1.0 and no toggle is stubbed**; adding it later is additive.
 
 ### 6.4 The unsettled tail
 
@@ -383,21 +511,40 @@ The same applies to a head span `[A, t₀)` before a category's first count.
 
 ### 6.5 Data coverage
 
-Per period, per category and overall:
+Per period, per category:
 
 ```
-coverage_pct = settled_days_in_period / total_days_in_period × 100
+coverage_pct = settled_days_in_period / period_days × 100
 ```
 
-Where settled days are those falling inside a count window. Displayed as a
-percentage with a plain-language reading:
+Where a **settled day** is one falling inside a **non-anomalous** count window
+(§6.2), and `period_days = (B_eff − A) + 1` (§6.3).
+
+**Overall coverage** is the average across categories, weighted by nothing —
+every category counts equally, because an uncounted shelf is an uncounted shelf
+regardless of its size:
+
+```
+overall_coverage_pct = Σ_c settled_days_c / (n_categories × period_days) × 100
+```
+
+The set of categories counted in `n_categories` is those **active now**, together
+with any category having at least one stock count, purchase or loss dated inside
+`[A, B_eff]`. That second clause matters: a category deactivated mid-period still
+has events in it and must still be assessed, while one deactivated long ago and
+untouched during the period correctly drops out. A never-counted category
+contributes zero settled days and is named in `categories_never_counted` — it
+*should* drag the number down, because it genuinely is unsettled.
+
+Displayed as a percentage with a plain-language reading:
 
 - **≥ 90%** — "Good coverage"
 - **60–89%** — "Partial — some categories need counting"
 - **< 60%** — "Low — these figures are largely unsettled"
 
 The data quality panel lists: categories never counted, categories stale > 30
-days, unsettled purchase totals, and negative-outflow anomalies.
+days, unsettled purchase totals, and every anomaly of the three kinds in §6.2,
+each linked to the record that caused it.
 
 ### 6.6 The profit chain
 
@@ -498,9 +645,15 @@ acceptable.
 
 Fields: category · date (defaults today) · amount at buying price · optional note.
 
-On submit, before writing: the stock question of §3.2A. Both records — count and
-purchase — are written in a **single transaction**. A purchase never exists
-without its count.
+On submit, before writing: the stock question of §3.2A, unless the backdating
+exception applies. Both records — count and purchase — are written in a **single
+transaction**. A purchase that requires a count never exists without it.
+
+Submission is **idempotent**: an identifier is generated once per form
+submission, not per attempt, so a retry on a flaky phone connection returns the
+original result instead of posting the purchase twice. A duplicated purchase
+inflates outflow, which this model reports as profit — so a double-post is not a
+cosmetic bug, it is a false profit figure.
 
 Mobile-first: large numeric keypad, category as a picker, date defaulting to
 today with one-tap "yesterday".
@@ -543,7 +696,30 @@ Fields: category · date · amount at buying price · reason (§4.2) · optional
 - Currency is a single global setting, applied for display only. No multi-currency.
 - `occurred_on` is a `date` (business date). `created_at` is a `timestamptz`
   (audit). They are never conflated.
-- All reporting is inclusive of both interval endpoints.
+- All reporting is inclusive of both interval endpoints. Internally this is
+  converted to half-open arithmetic before any day subtraction (§6.3).
+- **The store has a timezone**, held in settings and defaulting to
+  `Africa/Casablanca`. "Today" always means today *in the shop*, never UTC.
+  Between 23:00 and midnight local these differ, and a UTC "today" would reject
+  the day's own entries as being in the future.
+- **No future dates.** Backdating is allowed without limit. This guard is
+  enforced by a trigger, never by a `CHECK` constraint: a `CHECK` containing
+  `current_date` is not immutable, so it is re-evaluated on restore and a dump
+  taken today can fail to load tomorrow — the worst possible failure mode for the
+  one artefact protecting the store's history.
+
+### 9.5 Rounding
+
+Allocation produces fractions, and a figure that does not add up on screen
+destroys more trust than the precision is worth.
+
+- Carry **full `numeric` precision** through the entire computation chain.
+- Round to 2 decimals **exactly once**, at the point of emission into the report.
+- Derive every total as **the sum of its already-rounded components**, so the
+  category table always adds up to the KPI above it.
+
+A total may therefore differ from the unrounded truth by a cent or two. That is
+the intended trade.
 
 ### 9.2 Auditability
 
@@ -585,45 +761,62 @@ Counts: 1 Jan → 2,000 · 20 Jan → 1,500 · 5 Feb → 900
 Purchases: 8 Jan → 3,000 · 25 Jan → 2,500
 Losses: 15 Jan → 200 (spoiled)
 
+All day arithmetic below is half-open, per §6.3: the requested period `[1 Jan,
+31 Jan]` becomes `[1 Jan, 1 Feb)`.
+
 **Window 1 — 1 Jan to 20 Jan (19 days, fully inside period)**
 ```
 outflow      = 2,000 + 3,000 − 1,500 = 3,500
 losses       = 200
 goods_sold   = 3,300
+overlap      = min(20 Jan, 1 Feb) − max(1 Jan, 1 Jan) = 19 days
 allocated    = 3,300 × 19/19 = 3,300
 ```
 
-**Window 2 — 20 Jan to 5 Feb (16 days, 11 inside period)**
+**Window 2 — 20 Jan to 5 Feb (16 days, 12 inside period)**
 ```
 outflow      = 1,500 + 2,500 − 900 = 3,100
 losses       = 0
 goods_sold   = 3,100
-allocated    = 3,100 × 11/16 = 2,131.25
+overlap      = min(5 Feb, 1 Feb) − max(20 Jan, 1 Jan) = 12 days   (20–31 Jan inclusive)
+allocated    = 3,100 × 12/16 = 2,325.00
 ```
 
 **Beverages, January**
 ```
-goods_sold_at_cost  = 5,431.25
-revenue_est         ≈ 5,431.25 × 1.20 = 6,517.50
-gross_profit_est    ≈ 1,086.25
+goods_sold_at_cost  = 5,625.00
+revenue_est         ≈ 5,625.00 × 1.20 = 6,750.00
+gross_profit_est    ≈ 1,125.00
 shrinkage           =   200        (measured)
 purchases           = 5,500        (measured)
-coverage            = 100%         (31 of 31 days settled)
+coverage            = 100%         (19 + 12 = 31 of 31 days settled)
 ```
 
-Note that **purchases (5,500) exceed goods sold (5,431)** — the store built
-stock slightly. Cash out overstates the period's true cost by that difference.
-This is precisely the distinction §6.7 exists to make visible.
+Note that **goods sold (5,625) exceed purchases (5,500)** — the store drew its
+shelves down slightly over the month. Cash out therefore *understates* the
+period's true cost by that difference. This is precisely the distinction §6.7
+exists to make visible; a month of heavy restocking shows the same effect with
+the signs reversed.
+
+> **This example is normative.** It is implemented as pgTAP fixture
+> `050_allocation.sql` and is the single most important test in the suite. An
+> earlier draft of this document computed window 2's overlap as 11 days and still
+> claimed 100% coverage — 19 + 11 = 30 of 31, which cannot both be true. The
+> error was mixing an inclusive period end with half-open window arithmetic. If
+> these figures and the test ever disagree, the test is right.
 
 ---
 
 ## 11. Open questions
 
-| # | Question | Default if unanswered |
+**All six are answered.** Recorded in `v1.0_impl_plan.md` §1.2 and adopted as
+final for v1.0; they are listed here so this document stands on its own.
+
+| # | Question | **Adopted for v1.0** |
 |---|---|---|
-| **Q1** | Markup edits effective from *today* or *start of month*? | Today |
-| **Q2** | Is "special event spending" `owner_draw` or `operating`? | `owner_draw` |
-| **Q3** | Prorate partial count windows, or snap the period to real counts? | Prorate, snapping as a later toggle |
-| **Q4** | UI language — French, Arabic, English? Is RTL needed? | French, LTR |
-| **Q5** | Currency — MAD, DZD, TND, other? | MAD |
-| **Q6** | Should the dashboard have a printable / exportable monthly summary? | Not in v1 |
+| **Q1** | Markup edits effective from *today* or *start of month*? | **Today**, and the date stays editable in the rate-history dialog |
+| **Q2** | Is "special event spending" `owner_draw` or `operating`? | **`owner_draw`** — weddings, Aid, family occasions |
+| **Q3** | Prorate partial count windows, or snap the period to real counts? | **Prorate.** Snapping is not built in v1.0 and no toggle is stubbed |
+| **Q4** | UI language — French, Arabic, English? Is RTL needed? | **French, LTR.** i18next scaffolded with `fr` only; `ar`/`en` are additive later |
+| **Q5** | Currency — MAD, DZD, TND, other? | **MAD**, from settings, display-only |
+| **Q6** | Should the dashboard have a printable / exportable monthly summary? | **Not in v1.0** |

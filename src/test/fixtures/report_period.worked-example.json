@@ -1,0 +1,64 @@
+{
+  "by_category": [
+    {
+      "category_id": "bbbbbbbb-0000-0000-0000-000000000001",
+      "coverage_pct": 100.0,
+      "days_since_count": 11,
+      "goods_sold_at_cost": 5625.0,
+      "gross_profit_est": 1125.0,
+      "last_count_on": "2026-01-20",
+      "last_count_value": 1500.0,
+      "losses_in_period": 200.0,
+      "markup_pct": 20.0,
+      "name": "Beverages",
+      "purchases_in_period": 5500.0,
+      "revenue_est": 6750.0,
+      "settled_days": 31,
+      "unsettled_purchases": 0.0
+    }
+  ],
+  "charges_by_category": [
+    {
+      "amount": 2000.0,
+      "charge_category_id": "300203af-1dbd-4a4f-9794-968a03fa411a",
+      "name": "Loyer",
+      "nature": "operating"
+    }
+  ],
+  "coverage": {
+    "anomalies": [],
+    "categories_never_counted": [],
+    "categories_stale": [],
+    "level": "good",
+    "pct": 100.0,
+    "unsettled_purchases": 0.0
+  },
+  "measured": {
+    "cash_out": 7500.0,
+    "operating_charges": 2000.0,
+    "owner_draws_cash": 0.0,
+    "owner_draws_in_kind": 0.0,
+    "purchases_total": 5500.0,
+    "shrinkage_losses": 200.0
+  },
+  "modelled": {
+    "cost_incurred": 7825.0,
+    "goods_sold_at_cost": 5625.0,
+    "gross_profit_est": 1125.0,
+    "net_cash_change_est": -1075.0,
+    "operating_profit_est": -1075.0,
+    "revenue_est": 6750.0
+  },
+  "period": {
+    "clamped": false,
+    "days": 31,
+    "effective_to": "2026-01-31",
+    "from": "2026-01-01",
+    "to": "2026-01-31"
+  },
+  "stock_on_hand": {
+    "max_possible": 4000.0,
+    "oldest_count_on": "2026-01-20",
+    "total_last_counted": 1500.0
+  }
+}

@@ -2,7 +2,12 @@
 
 Technical design for the mini ERP defined in `domain-spec.md`.
 
-Status: **draft for validation**. Open questions marked **[Q]**.
+Status: **approved for build.** Amended 2026-08-02 to match `v1.0_impl_plan.md`
+§2 and the findings in `plan_review.md`; all five open questions are answered
+(§10).
+
+Where this document and the plan disagree, **the plan is normative** — and any
+such disagreement is a defect to be fixed here.
 
 ---
 
@@ -83,6 +88,9 @@ client" is a spec violation.
 create table article_category (
   id          uuid primary key default gen_random_uuid(),
   name        text not null unique,
+  -- Contents hint shown in the count question, e.g. 'lait, fromage, yaourt'.
+  -- The only defence against the category-scope trap (domain-spec §1.4 item 5).
+  description text not null default '',
   active      boolean not null default true,
   sort_order  int not null default 0,
   created_at  timestamptz not null default now()
@@ -115,8 +123,19 @@ create table app_settings (
   currency_code text not null default 'MAD',
   locale        text not null default 'fr',
   store_name    text not null default 'Aziz',
+  -- "Today" means today in the shop, never UTC (domain-spec §9.1).
+  timezone      text not null default 'Africa/Casablanca',
+  -- Null until the opening sweep completes (domain-spec §3.5).
+  onboarded_at  timestamptz,
   updated_at    timestamptz not null default now()
 );
+
+-- The store's business date. Every future-date guard and every period clamp
+-- goes through this, never through current_date.
+create function store_today() returns date
+language sql stable set search_path = public, pg_temp as $$
+  select (now() at time zone (select timezone from app_settings where id = 1))::date
+$$;
 ```
 
 ### 2.3 Transaction tables
@@ -124,23 +143,39 @@ create table app_settings (
 ```sql
 create type count_source as enum ('standalone', 'purchase');
 
+-- NOTE on every `occurred_on` below: there is deliberately NO
+-- `check (occurred_on <= current_date)`. Such a CHECK is non-immutable, so it is
+-- re-validated on restore and a dump taken today can fail to load tomorrow; and
+-- `current_date` is UTC, which rejects the shop's own late-evening entries as
+-- being in the future. The guard is a BEFORE INSERT OR UPDATE trigger against
+-- store_today() instead — see §2.6 of the plan.
+
 create table stock_count (
   id            uuid primary key default gen_random_uuid(),
   category_id   uuid not null references article_category(id),
-  occurred_on   date not null check (occurred_on <= current_date),
+  occurred_on   date not null,
   value_at_cost numeric(14,2) not null check (value_at_cost >= 0),
   source        count_source not null,
   note          text,
   created_at    timestamptz not null default now()
 );
 
+-- At most one standalone count per category per date (plan §2.15e).
+create unique index stock_count_one_standalone_per_day
+  on stock_count (category_id, occurred_on)
+  where source = 'standalone';
+
 create table purchase (
   id             uuid primary key default gen_random_uuid(),
   category_id    uuid not null references article_category(id),
-  occurred_on    date not null check (occurred_on <= current_date),
+  occurred_on    date not null,
   amount_at_cost numeric(14,2) not null check (amount_at_cost > 0),
-  -- The mandatory "what was left before this delivery?" count.
-  prior_count_id uuid not null unique references stock_count(id) on delete restrict,
+  -- The "what was left before this delivery?" count. NULLABLE: required only
+  -- when the purchase is the category's newest event, omitted when the purchase
+  -- is dated strictly before the category's last count (domain-spec §3.2A).
+  -- The rule is a cross-row condition, so it is enforced in record_purchase(),
+  -- not as a table constraint.
+  prior_count_id uuid unique references stock_count(id) on delete restrict,
   note           text,
   created_at     timestamptz not null default now()
 );
@@ -153,7 +188,7 @@ create type loss_reason as enum (
 create table stock_loss (
   id             uuid primary key default gen_random_uuid(),
   category_id    uuid not null references article_category(id),
-  occurred_on    date not null check (occurred_on <= current_date),
+  occurred_on    date not null,
   amount_at_cost numeric(14,2) not null check (amount_at_cost > 0),
   reason         loss_reason not null default 'other',
   note           text,
@@ -163,7 +198,7 @@ create table stock_loss (
 create table charge (
   id                 uuid primary key default gen_random_uuid(),
   charge_category_id uuid not null references charge_category(id),
-  occurred_on        date not null check (occurred_on <= current_date),
+  occurred_on        date not null,
   amount             numeric(14,2) not null check (amount > 0),
   note               text,
   created_at         timestamptz not null default now()
@@ -183,21 +218,22 @@ Indexes: `(category_id, occurred_on)` on `stock_count`, `purchase`, `stock_loss`
 `(occurred_on)` on `charge`; `(category_id, effective_from desc)` on `markup_rate`.
 
 **Loss reason → nature** is a pure function, implemented as an immutable SQL
-function rather than a stored column so reclassification is a one-line change:
+function rather than a stored column so reclassification is a one-line change.
+
+Losses get their **own** enum rather than reusing `charge_nature`: charges and
+losses are different domains that happen to share one distinction, and
+`shrinkage` is meaningless as a charge (Q7, resolved).
 
 ```sql
-create function loss_nature(r loss_reason) returns charge_nature
-language sql immutable as $$
+create type loss_nature_t as enum ('shrinkage', 'owner_draw');
+
+create function loss_nature(r loss_reason) returns loss_nature_t
+language sql immutable set search_path = public, pg_temp as $$
   select case when r in ('family_taken','personal_use')
-              then 'owner_draw'::charge_nature
-              else 'shrinkage_placeholder' end
+              then 'owner_draw'::loss_nature_t
+              else 'shrinkage'::loss_nature_t end
 $$;
 ```
-
-> **[Q7]** `shrinkage` is not a `charge_nature` value. Either add a third enum
-> value `shrinkage`, or use a separate `loss_nature` enum
-> (`shrinkage | owner_draw`). Recommendation: **separate enum**, since charges
-> and losses are different domains that happen to share one distinction.
 
 ### 2.4 Audit log
 
@@ -220,14 +256,26 @@ Append-only: no update or delete grants to any role.
 
 ### 2.5 Referential integrity between purchase and its count
 
-A purchase **cannot exist without its count** (`prior_count_id NOT NULL`), and
-the count cannot be deleted while the purchase references it (`ON DELETE
-RESTRICT`). Deleting a purchase must cascade to its embedded count — handled by
-an `AFTER DELETE` trigger on `purchase` that removes the linked
+When a purchase carries a count, the count cannot be deleted while the purchase
+references it (`ON DELETE RESTRICT`). Deleting a purchase cascades to its
+embedded count — an `AFTER DELETE` trigger on `purchase` removes the linked
 `stock_count` row when `source = 'purchase'`.
 
 Both are written in one transaction via the `record_purchase` RPC (§4.1), never
-by two separate client calls.
+by two separate client calls. To make that unbypassable, **`authenticated` gets
+no `INSERT` grant on `purchase`** — every creation goes through the RPC, which is
+where the "count required unless backdated" rule lives. `UPDATE` and `DELETE`
+remain direct and audited.
+
+**The pair must agree.** Nothing above stops a purchase pointing at a count from
+a different category or date, yet `v_stock_event` reads the category from the
+count and the ordering anchor from the purchase — so a mismatch silently
+corrupts the timeline rather than failing. A constraint trigger on `purchase`
+asserts, whenever `prior_count_id is not null`:
+
+- `stock_count.source = 'purchase'`
+- `stock_count.category_id = purchase.category_id`
+- `stock_count.occurred_on = purchase.occurred_on`
 
 ---
 
@@ -256,8 +304,12 @@ select p.category_id, p.occurred_on,
 from purchase p
 
 union all
+-- ord_sub = 2: an embedded count (0) and its purchase (1) share one anchor, so a
+-- loss written in the SAME transaction as a purchase would tie on ord_anchor and
+-- fall through to a random uuid — which could place it BETWEEN the pair. Sorting
+-- losses after the pair on an exact tie makes them indivisible by construction.
 select l.category_id, l.occurred_on,
-       0, l.created_at, 0,
+       0, l.created_at, 2,
        'loss', l.amount_at_cost, l.id
 from stock_loss l
 
@@ -324,18 +376,40 @@ The final `where` clause is what implements the **"never extrapolate past the
 last count"** rule of domain-spec §6.4 — the trailing span simply produces no
 window, so it can contribute no profit.
 
+> **`window_days` is not the allocation denominator on its own.** Two counts can
+> share a date (two purchases in one day, or a purchase then a month-end sweep),
+> giving `close_on - open_on = 0`. `greatest(…, 1)` floors the denominator at 1,
+> but the *overlap* of a zero-length interval with any period is also 0 — so the
+> window's goods sold would be multiplied by zero and vanish from every report,
+> unflagged. A zero-length window is a point in time and is allocated whole when
+> its date falls in the period; see domain-spec §6.3.
+
 ### 3.3 Markup resolution
+
+Applied at each window's **open date**, per domain-spec §6.3.
+
+A window opening before the category's first `effective_from` — reachable by
+backdating — would return no row, and `NULL × goods_sold` propagates a silent
+`NULL` through the entire profit chain. So the lookup **falls back to the
+earliest** rate on record:
 
 ```sql
 create function markup_at(p_category uuid, p_date date)
-returns numeric language sql stable as $$
-  select markup_pct from markup_rate
-  where category_id = p_category and effective_from <= p_date
-  order by effective_from desc limit 1
+returns numeric language sql stable set search_path = public, pg_temp as $$
+  select coalesce(
+    (select markup_pct from markup_rate
+      where category_id = p_category and effective_from <= p_date
+      order by effective_from desc limit 1),
+    (select markup_pct from markup_rate
+      where category_id = p_category
+      order by effective_from asc limit 1)
+  )
 $$;
 ```
 
-Applied at each window's **open date**, per domain-spec §6.3.
+If a category has no rate at all, the function still returns `NULL` — and the
+window is emitted as a `no_markup` anomaly rather than contributing a null
+figure (domain-spec §6.2).
 
 ### 3.4 The reporting RPC
 
@@ -420,41 +494,104 @@ trend chart, computed by the same primitives.
 Two writes must be atomic and are exposed as functions rather than table inserts:
 
 ```sql
--- Writes the count and the purchase together. Neither can exist alone.
+-- Writes the count and the purchase together. p_prior_stock is NULL when the
+-- backdating exception applies (domain-spec §3.2A); the function rejects a NULL
+-- when the purchase is the category's newest event.
 create function record_purchase(
-  p_category uuid, p_date date,
+  p_request_id uuid, p_category uuid, p_date date,
   p_amount numeric, p_prior_stock numeric, p_note text
-) returns uuid ...
+) returns jsonb ...     -- {purchase_id, count_id, replayed}
 
 -- Writes one count per category in a single transaction (month-end sweep).
 create function record_count_sweep(
-  p_date date, p_counts jsonb   -- [{category_id, value_at_cost}, …]
-) returns int ...
+  p_request_id uuid, p_date date, p_counts jsonb   -- [{category_id, value_at_cost}, …]
+) returns jsonb ...     -- {count_ids, n, replayed}
 ```
 
 Charges, losses and single counts are ordinary PostgREST inserts — they have no
 multi-row invariant.
 
-### 4.2 Security
-
-RLS is enabled on **every** table. Because v1 is single-user, policies are:
+**Both RPCs are idempotent.** §5.3 promises writes survive a retry; this is what
+implements it. `p_request_id` is generated **once per form submission, not per
+attempt**, and the result is cached:
 
 ```sql
-alter table purchase enable row level security;
-create policy authed on purchase for all
-  to authenticated using (true) with check (true);
+create table write_request (
+  request_id uuid primary key,
+  rpc        text not null,
+  result     jsonb not null,
+  at         timestamptz not null default now()
+);
 ```
 
-The `anon` role receives no grants on any business table. RLS is enabled even
-though there is one user, so that adding a `store_id` or a role column later is
-a policy change, not a security retrofit.
+A repeat call with the same `request_id` returns the cached result with
+`replayed: true` instead of writing again, which lets the UI distinguish "saved"
+from "already saved". Without this, a retry on a flaky phone connection posts the
+purchase twice — and a duplicated purchase inflates outflow, which this model
+reports as **profit**. Both RPCs return `jsonb` precisely so a cached result can
+be replayed intact.
+
+`write_request` is written only by these `security definer` functions: RLS is
+enabled and `authenticated` receives no direct grant. At roughly 1,500 writes a
+year it is never pruned.
+
+### 4.2 Security
+
+RLS is enabled on **every** table.
+
+**Authentication is not authorisation.** An earlier draft of this document used
+`to authenticated using (true)`. Combined with Supabase's default-open email
+signup, that means any stranger who registers becomes `authenticated` and gains
+full read and write access to the store's finances. Two independent defences,
+both required:
+
+1. **Public signup is disabled** in the project's Auth settings. The single user
+   is created by the owner from the dashboard, and the app has no signup route.
+2. **Policies check an allowlist, not merely authentication:**
+
+```sql
+create table app_user (
+  user_id uuid primary key,           -- auth.users.id
+  label   text not null,
+  active  boolean not null default true
+);
+
+create function is_app_user() returns boolean
+language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (select 1 from app_user where user_id = auth.uid() and active)
+$$;
+
+create policy app_user_all on purchase for all
+  to authenticated using (is_app_user()) with check (is_app_user());
+```
+
+Applied to every business table. `anon` receives no grants anywhere, and
+`revoke execute on all functions in schema public from anon, public` is the last
+statement of the grants migration.
+
+**Bootstrapping the allowlist.** Creating a login does not by itself grant
+access: the Supabase dashboard writes an `auth.users` row and nothing else, so
+`app_user` stays empty, `is_app_user()` returns false for everyone, and the owner
+meets a working application that shows nothing — with no way to fix it from
+inside the app. Membership is deliberately **not self-service**:
+
+- `app_user` carries RLS with a **self-read policy only**
+  (`using (user_id = auth.uid())`) and **no** `INSERT` / `UPDATE` / `DELETE`
+  grant to `authenticated`.
+- The first row is inserted **once, as `service_role`**, from the Supabase SQL
+  editor after the owner's user exists:
+  `insert into app_user (user_id, label) values ('<uuid from auth.users>', 'Aziz');`
+
+This is an explicit deployment step, recorded in the plan's owner action items
+and gated in Phase 3 — not something to be inferred at the time.
 
 `audit_log` grants `INSERT` to the trigger function only (`security definer`),
 and `SELECT` to authenticated. No `UPDATE`/`DELETE` grants exist.
 
-**[Q8]** Should staff-vs-owner roles be added now? The domain spec says single
-login. Adding a `role` claim later is straightforward given RLS is already on;
-recommendation is to defer.
+Staff-vs-owner roles are **deferred** (Q8, resolved). The domain spec specifies a
+single login; because RLS is already enabled and the policies already call a
+function, adding a role claim later is a policy change rather than a security
+retrofit.
 
 ---
 
@@ -535,7 +672,11 @@ is real complexity, and the model tolerates backdating — a user who loses sign
 can enter yesterday's purchase today with the correct date. Revisit if the store
 turns out to have poor connectivity.
 
-**[Q9]** Is connectivity in the shop reliable enough for online-only writes?
+**Resolved (Q9):** connectivity is **assumed reliable enough** for online-only
+writes. The flaky-connection case that actually costs money — a retry
+double-posting a purchase — is handled by the idempotent RPCs of §4.1 rather than
+by an offline queue. If the shop turns out to have genuinely poor signal, a write
+queue is revisited then.
 
 ---
 
@@ -657,12 +798,15 @@ and it is fully testable without a UI.
 
 ## 10. Open questions
 
-| # | Question | Default if unanswered |
-|---|---|---|
-| **Q7** | Separate `loss_nature` enum, or extend `charge_nature`? | Separate enum |
-| **Q8** | Add owner/staff roles now, or defer? | Defer |
-| **Q9** | Is shop connectivity reliable enough for online-only writes? | Assume yes |
-| **Q10** | Cloudflare Pages or Vercel? | Cloudflare Pages |
-| **Q11** | Is a private GitHub repo available for encrypted backups? | Assume yes |
+**All five are answered.** Recorded in `v1.0_impl_plan.md` §1.2 and adopted as
+final for v1.0.
 
-Plus **Q1–Q6** in `domain-spec.md` §11.
+| # | Question | **Adopted for v1.0** |
+|---|---|---|
+| **Q7** | Separate `loss_nature` enum, or extend `charge_nature`? | **Separate `loss_nature_t` enum** (`shrinkage`, `owner_draw`) — §2.3 |
+| **Q8** | Add owner/staff roles now, or defer? | **Defer.** Single account; RLS written so a role claim is a policy change — §4.2 |
+| **Q9** | Is shop connectivity reliable enough for online-only writes? | **Assume yes.** Online-only writes, no offline queue; idempotent RPCs cover the flaky-connection case — §4.1 |
+| **Q10** | Cloudflare Pages or Vercel? | **Cloudflare Pages** |
+| **Q11** | Is a private GitHub repo available for encrypted backups? | **Assume available.** Owner action item — plan §7 |
+
+Plus **Q1–Q6** in `domain-spec.md` §11, all likewise answered.

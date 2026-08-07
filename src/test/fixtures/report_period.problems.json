@@ -1,0 +1,187 @@
+{
+  "period": {
+    "to": "2026-01-31",
+    "days": 31,
+    "from": "2026-01-01",
+    "clamped": false,
+    "effective_to": "2026-01-31"
+  },
+  "coverage": {
+    "pct": 10.2,
+    "level": "low",
+    "anomalies": [
+      {
+        "kind": "negative_outflow",
+        "open_on": "2026-01-01",
+        "category": "Boissons",
+        "close_on": "2026-01-20",
+        "category_id": "a0000000-0000-4000-8000-000000000001",
+        "goods_sold_at_cost": -500.0
+      },
+      {
+        "kind": "losses_exceed_outflow",
+        "open_on": "2026-01-01",
+        "category": "Produits laitiers",
+        "close_on": "2026-01-20",
+        "category_id": "a0000000-0000-4000-8000-000000000002",
+        "goods_sold_at_cost": -100.0
+      },
+      {
+        "kind": "no_markup",
+        "open_on": "2026-01-01",
+        "category": "Surgelés",
+        "close_on": "2026-01-20",
+        "category_id": "a0000000-0000-4000-8000-000000000003",
+        "goods_sold_at_cost": 200.0
+      }
+    ],
+    "categories_stale": [
+      {
+        "days": 61,
+        "name": "Tabac",
+        "category_id": "a0000000-0000-4000-8000-000000000005"
+      }
+    ],
+    "unsettled_purchases": 1600.0,
+    "categories_never_counted": ["Fruits et légumes"]
+  },
+  "measured": {
+    "cash_out": 6030.0,
+    "purchases_total": 2800.0,
+    "owner_draws_cash": 800.0,
+    "shrinkage_losses": 200.0,
+    "operating_charges": 2430.0,
+    "owner_draws_in_kind": 150.0
+  },
+  "modelled": {
+    "revenue_est": 1980.0,
+    "cost_incurred": 4280.0,
+    "gross_profit_est": 330.0,
+    "goods_sold_at_cost": 1650.0,
+    "net_cash_change_est": -3250.0,
+    "operating_profit_est": -2300.0
+  },
+  "by_category": [
+    {
+      "name": "Boissons",
+      "markup_pct": 20.0,
+      "category_id": "a0000000-0000-4000-8000-000000000001",
+      "revenue_est": 0.0,
+      "coverage_pct": 0.0,
+      "settled_days": 0,
+      "last_count_on": "2026-01-20",
+      "days_since_count": 11,
+      "gross_profit_est": 0.0,
+      "last_count_value": 1500.0,
+      "losses_in_period": 0.0,
+      "goods_sold_at_cost": 0.0,
+      "purchases_in_period": 0.0,
+      "unsettled_purchases": 0.0
+    },
+    {
+      "name": "Produits laitiers",
+      "markup_pct": 20.0,
+      "category_id": "a0000000-0000-4000-8000-000000000002",
+      "revenue_est": 0.0,
+      "coverage_pct": 0.0,
+      "settled_days": 0,
+      "last_count_on": "2026-01-20",
+      "days_since_count": 11,
+      "gross_profit_est": 0.0,
+      "last_count_value": 900.0,
+      "losses_in_period": 200.0,
+      "goods_sold_at_cost": 0.0,
+      "purchases_in_period": 0.0,
+      "unsettled_purchases": 0.0
+    },
+    {
+      "name": "Surgelés",
+      "markup_pct": null,
+      "category_id": "a0000000-0000-4000-8000-000000000003",
+      "revenue_est": 0.0,
+      "coverage_pct": 0.0,
+      "settled_days": 0,
+      "last_count_on": "2026-01-20",
+      "days_since_count": 11,
+      "gross_profit_est": 0.0,
+      "last_count_value": 800.0,
+      "losses_in_period": 0.0,
+      "goods_sold_at_cost": 0.0,
+      "purchases_in_period": 0.0,
+      "unsettled_purchases": 0.0
+    },
+    {
+      "name": "Épicerie sèche",
+      "markup_pct": 20.0,
+      "category_id": "a0000000-0000-4000-8000-000000000004",
+      "revenue_est": 1980.0,
+      "coverage_pct": 61.3,
+      "settled_days": 19,
+      "last_count_on": "2026-01-20",
+      "days_since_count": 11,
+      "gross_profit_est": 330.0,
+      "last_count_value": 1400.0,
+      "losses_in_period": 150.0,
+      "goods_sold_at_cost": 1650.0,
+      "purchases_in_period": 2100.0,
+      "unsettled_purchases": 900.0
+    },
+    {
+      "name": "Tabac",
+      "markup_pct": 20.0,
+      "category_id": "a0000000-0000-4000-8000-000000000005",
+      "revenue_est": 0.0,
+      "coverage_pct": 0.0,
+      "settled_days": 0,
+      "last_count_on": "2025-12-01",
+      "days_since_count": 61,
+      "gross_profit_est": 0.0,
+      "last_count_value": 1000.0,
+      "losses_in_period": 0.0,
+      "goods_sold_at_cost": 0.0,
+      "purchases_in_period": 300.0,
+      "unsettled_purchases": 300.0
+    },
+    {
+      "name": "Fruits et légumes",
+      "markup_pct": 20.0,
+      "category_id": "a0000000-0000-4000-8000-000000000006",
+      "revenue_est": 0.0,
+      "coverage_pct": 0.0,
+      "settled_days": 0,
+      "last_count_on": null,
+      "days_since_count": null,
+      "gross_profit_est": 0.0,
+      "last_count_value": null,
+      "losses_in_period": 0.0,
+      "goods_sold_at_cost": 0.0,
+      "purchases_in_period": 400.0,
+      "unsettled_purchases": 400.0
+    }
+  ],
+  "stock_on_hand": {
+    "max_possible": 6800.0,
+    "oldest_count_on": "2025-12-01",
+    "total_last_counted": 5600.0
+  },
+  "charges_by_category": [
+    {
+      "name": "Loyer",
+      "amount": 2000.0,
+      "nature": "operating",
+      "charge_category_id": "1b1fc0fb-5cf8-4459-bd9a-98fdf3f81adf"
+    },
+    {
+      "name": "Électricité et eau",
+      "amount": 430.0,
+      "nature": "operating",
+      "charge_category_id": "48ae15a5-a626-4af2-8933-4e2c0c60a6a6"
+    },
+    {
+      "name": "Dépenses familiales",
+      "amount": 800.0,
+      "nature": "owner_draw",
+      "charge_category_id": "b664e1f6-eeb7-4a16-a95d-9c0053c56b50"
+    }
+  ]
+}

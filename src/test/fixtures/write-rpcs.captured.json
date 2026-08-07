@@ -1,0 +1,58 @@
+{
+  "expected_on_hand": 900.0,
+  "expected_on_hand_never_counted": null,
+  "plausibility_exceeds_bound": {
+    "days_since_last_count": 2,
+    "entered": 99999.0,
+    "expected_on_hand": 900.0,
+    "last_count_on": "2026-05-31",
+    "settled_windows": 2,
+    "verdict": "exceeds_bound"
+  },
+  "plausibility_never_counted": {
+    "days_since_last_count": null,
+    "entered": 500.0,
+    "expected_on_hand": null,
+    "last_count_on": null,
+    "settled_windows": 0,
+    "verdict": "ok"
+  },
+  "plausibility_ok": {
+    "days_since_last_count": 2,
+    "entered": 850.0,
+    "expected_on_hand": 900.0,
+    "last_count_on": "2026-05-31",
+    "settled_windows": 2,
+    "verdict": "ok"
+  },
+  "record_count_sweep": {
+    "count_ids": ["2cad93f8-b0a2-47cd-adfe-aa4dc20464a7", "df9330c5-b187-454a-9731-57465afa9e35"],
+    "n": 2,
+    "replayed": false
+  },
+  "record_count_sweep_replayed": {
+    "count_ids": ["2cad93f8-b0a2-47cd-adfe-aa4dc20464a7", "df9330c5-b187-454a-9731-57465afa9e35"],
+    "n": 2,
+    "replayed": true
+  },
+  "record_count_sweep_single": {
+    "count_ids": ["bcf46e34-bde5-4cc9-82a4-6a92769a03c3"],
+    "n": 1,
+    "replayed": false
+  },
+  "record_purchase": {
+    "count_id": "42af4a6c-604f-460f-9442-3ffdda6acfd2",
+    "purchase_id": "3ea63575-91e5-4dd8-a342-50b125d65fbd",
+    "replayed": false
+  },
+  "record_purchase_backdated": {
+    "count_id": null,
+    "purchase_id": "9ff756f2-e42c-4fcc-b6e4-6610603cac89",
+    "replayed": false
+  },
+  "record_purchase_replayed": {
+    "count_id": "42af4a6c-604f-460f-9442-3ffdda6acfd2",
+    "purchase_id": "3ea63575-91e5-4dd8-a342-50b125d65fbd",
+    "replayed": true
+  }
+}

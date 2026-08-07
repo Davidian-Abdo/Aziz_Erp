@@ -1,0 +1,39 @@
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase'
+
+export type Category = {
+  id: string
+  name: string
+  /** The contents hint — "lait, fromage, yaourt, beurre". Not decoration: it is
+   * read out wherever the whole shelf is being asked about, because a category
+   * is a basket and a delivery is one product in it (plan §2.3). */
+  description: string
+  active: boolean
+  sortOrder: number
+}
+
+export const categoriesQueryKey = ['article_category'] as const
+
+export function useCategories(includeInactive = false) {
+  return useQuery({
+    queryKey: [...categoriesQueryKey, { includeInactive }] as const,
+    queryFn: async (): Promise<Category[]> => {
+      let q = supabase
+        .from('article_category')
+        .select('id, name, description, active, sort_order')
+        .order('sort_order')
+        .order('name')
+      if (!includeInactive) q = q.eq('active', true)
+      const { data, error } = await q
+      if (error) throw error
+      return data.map((row) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        active: row.active,
+        sortOrder: row.sort_order,
+      }))
+    },
+    staleTime: 5 * 60_000,
+  })
+}

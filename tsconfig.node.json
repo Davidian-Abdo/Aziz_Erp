@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "types": ["node", "vitest/globals"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "module": "nodenext",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  /*
+   * `no-raw-money.test.ts` reads the source tree off disk, so it needs Node's
+   * types. It lives here rather than in the app project so that adding `node`
+   * to the app's types is never necessary — application code must not be able
+   * to typecheck against a filesystem API it cannot reach in a browser.
+   */
+  "include": ["vite.config.ts", "src/test/no-raw-money.test.ts"]
+}
