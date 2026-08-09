@@ -256,7 +256,7 @@ describe('the data quality panel', () => {
 
 describe('the period selector', () => {
   it('drives the report, from the store’s today rather than the device’s', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderDashboard()
 
     expect(state.requested.at(-1)).toEqual({ from: '2026-08-01', to: '2026-08-31' })

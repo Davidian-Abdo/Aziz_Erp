@@ -817,3 +817,98 @@ agent has to guess.
 `aziz_erp_pg` stays removed, its volume kept, port 5434 free. No other project
 touched. `npm run verify` green: **119 tests across 15 files.** Pushed to
 `origin/main`.
+
+### Entry 9 — 2026-08-09 — Amer, owner's Windows PC — Phase 4 Playwright exit criterion met
+
+**The six Playwright tests are passing, twice in a row, with no manual cleanup
+between runs.** `e2e/purchase.spec.ts` and `e2e/sweep.spec.ts` — the purchase
+round trip, the deliberately double-submitted purchase, the backdated purchase,
+the month-end sweep, the partial-sweep refusal, and the loss prompt navigation
+— all ran against the `aziz-dev` Supabase project, in a real Chromium browser,
+on the owner's Windows PC. **Phase 4 is closed.**
+
+**Fixes required before a single test passed.** Four classes of problem:
+
+1. **Timing race on the sweep tab.** `inputs.count()` was called immediately
+   after the tab click, before the categories API response returned. The sweep
+   form shows a loading state; zero inputs were found. Fixed by
+   `await expect(inputs.first()).toBeVisible()` before `inputs.count()`.
+
+2. **Plausibility gate race in three tests.** `saveAnyway.isVisible()` is
+   non-waiting: it was called right after the save click, before the async
+   `checkCountPlausibility` RPC completed. The dialog was not yet visible. Fixed
+   by `await saveAnyway.waitFor({ timeout: 5000 }).catch(() => undefined)` before
+   the `isVisible()` check, in the retried-submission test (both attempts), the
+   first purchase test, and the loss prompt test.
+
+3. **`getByRole('heading', { name: 'Pertes' })` matched two elements.** Without
+   `exact: true`, Playwright's partial name matching also found `<h2>Dernières
+   pertes</h2>`. A multi-element locator cannot resolve to visible, so
+   `toBeVisible()` timed out even though `<h1>Pertes</h1>` was in the DOM.
+   Fixed by `{ name: 'Pertes', exact: true }`.
+
+4. **The test suite was not idempotent.** Each write-heavy test creates database
+   rows and does not clean them up. A second run hits the unique
+   `(category_id, occurred_on, source='standalone')` constraint for counts, or
+   finds two `137,42` rows instead of one for purchases. Fixed by adding a
+   cleanup block at the start of each write-heavy test:
+   - **Sweep test 1** (`DELETE stock_count WHERE occurred_on = today AND
+     source = 'standalone'`) — runs after the form is filled, before the save
+     click, so the window between cleanup and write is minimal.
+   - **Loss prompt test** (`DELETE stock_count WHERE category_id = ? AND
+     occurred_on = '2026-08-07' AND source = 'standalone'`) — uses a fixed past
+     date (not today, which the sweep test owns) and deletes exactly the one row
+     this test owns.
+   - **Retried submission test** (`DELETE purchase WHERE note LIKE 'e2e-%'`) —
+     the test fills a unique `e2e-${Date.now()}` marker in the note field; the
+     cleanup deletes all prior marker rows so exactly one `137,42` row remains
+     after the run.
+
+   Each cleanup block extracts the user's JWT from `localStorage` via
+   `page.evaluate` and calls the Supabase REST API via `page.request.fetch`,
+   using the authenticated session that the sign-in fixture already established.
+
+**Two Windows-specific fixes discovered along the way.**
+
+- **`no-raw-money.test.ts`** used `path.relative()` directly in comparisons.
+  On Windows `path.relative()` returns backslash-separated paths; the expected
+  values are POSIX strings. Every file comparison was silently false, meaning
+  the guard was passing without actually scanning anything. Fixed by a `rel()`
+  helper that normalises to forward slashes.
+- **`DashboardPage.test.tsx`** had `userEvent.setup()` without `{ delay: null }`
+  in the period-selector test. The default delay caused the test to time out
+  on a slower machine. Fixed.
+
+**A tool-chain finding worth knowing for future edits to the E2E specs.** The
+Claude Code `Edit` tool introduces Unicode RIGHT SINGLE QUOTATION MARK (U+2019)
+as a string delimiter instead of ASCII apostrophe (U+0027). TypeScript's parser
+rejects curly quotes as delimiters, so any Edit-tool change to a `.spec.ts`
+file that touches string literals corrupts the file silently. The fix used here:
+`scripts/fix-sweep-spec.mjs` and `scripts/fix-purchase-cleanup.mjs` apply all
+changes via Node.js `writeFileSync` with `String.fromCharCode(0x0027)` for every
+string delimiter, making the encoding unambiguous. **If either spec needs editing
+in a future session, use a script, not the Edit tool directly.**
+
+**Verified, and on what.**
+
+- **Six Playwright tests**, run twice consecutively against `aziz-dev`, in
+  Chromium on the owner's Windows PC. The second run passed with no manual DB
+  cleanup — the idempotency mechanism is live.
+- **`npm run verify`** — lint, format, `tsc -b`, Vitest. The Windows-path and
+  userEvent fixes were needed for this to pass on this machine.
+
+**Not verified.** The application was not looked at. Entry 8 listed "look at
+the application" as item 2 of Amer's task, specifically the mobile layout and
+the trend chart. That remains open and is the first thing for the next session.
+No pgTAP run was attempted — Docker is not configured on this machine.
+
+**Machine:** Windows PC. No Docker. No container created or started. The three
+fix scripts (`scripts/fix-e2e-specs.mjs`, `scripts/fix-purchase-cleanup.mjs`,
+`scripts/fix-sweep-spec.mjs`) are committed as a record of how the encoding
+problem was worked around. `npm run verify` green. Committed and pushed to
+`origin/main`.
+
+**Next for Amer: view the application first, then Phase 6.** Phase 6 (settings)
+needs Docker and a bash shell for `npm run db:test`; if Docker is not available,
+say so plainly in the entry rather than shipping Phase 6 with its pgTAP exit
+criterion unmeasured.

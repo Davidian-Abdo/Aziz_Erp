@@ -26,6 +26,9 @@ import { join, relative } from 'node:path'
 const SRC = join(process.cwd(), 'src')
 const FORMATTER = 'components/Money.tsx'
 
+// Windows path.relative() returns backslashes; normalise to POSIX for comparisons.
+const rel = (f: string) => relative(SRC, f).replace(/\\/g, '/')
+
 // A currency formatter, or a hand-rolled one, anywhere but <Money>.
 const FORMATTING = [/Intl\.NumberFormat/, /\.toFixed\s*\(/, /\.toLocaleString\s*\(/]
 
@@ -128,16 +131,16 @@ describe('money never bypasses <Money>', () => {
     // Without this, a broken path silently turns the whole guard into a no-op
     // that passes forever.
     expect(files.length).toBeGreaterThan(10)
-    expect(files.some((f) => relative(SRC, f) === FORMATTER)).toBe(true)
+    expect(files.some((f) => rel(f) === FORMATTER)).toBe(true)
   })
 
   it.each(FORMATTING.map((re) => [re.source, re] as const))(
     'no %s outside <Money>',
     (_label, pattern) => {
       const offenders = files
-        .filter((f) => relative(SRC, f) !== FORMATTER)
+        .filter((f) => rel(f) !== FORMATTER)
         .filter((f) => pattern.test(readFileSync(f, 'utf8')))
-        .map((f) => relative(SRC, f))
+        .map((f) => rel(f))
 
       expect(offenders).toEqual([])
     },
@@ -147,13 +150,13 @@ describe('money never bypasses <Money>', () => {
 describe('the app renders money, it never computes it', () => {
   const files = walk(SRC)
     .filter((f) => !/\.test\.tsx?$/.test(f))
-    .filter((f) => !ARITHMETIC_EXEMPT.includes(relative(SRC, f)))
+    .filter((f) => !ARITHMETIC_EXEMPT.includes(rel(f)))
 
   it.each(MONEY_NAMES)('no arithmetic on `%s`', (name) => {
     const pattern = arithmeticOn(name)
     const offenders = files
       .filter((f) => pattern.test(code(readFileSync(f, 'utf8'))))
-      .map((f) => relative(SRC, f))
+      .map((f) => rel(f))
 
     expect(offenders).toEqual([])
   })

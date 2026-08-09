@@ -27,6 +27,11 @@ test('a purchase and its embedded count are recorded together', async ({ signedI
   await page.getByLabel(/Valeur restante/).fill('1000')
   await page.getByRole('button', { name: 'Enregistrer l’achat' }).click()
 
+  // Plausibility may interpose; it never blocks (§3.2).
+  const plaus1 = page.getByRole('button', { name: 'Enregistrer quand même' })
+  await plaus1.waitFor({ timeout: 5000 }).catch(() => undefined)
+  if (await plaus1.isVisible()) await plaus1.click()
+
   await expect(page.getByRole('status')).toHaveText('Achat enregistré.')
 
   // The purchase is readable back, which means the transaction committed.
@@ -48,6 +53,29 @@ test('a purchase and its embedded count are recorded together', async ({ signedI
  */
 test('a retried submission does not post the purchase twice', async ({ signedIn: page }) => {
   await page.goto('/purchases')
+  // Delete any purchases from previous test runs that would inflate the count.
+  // Without this, each run adds a 137,42 row that the toHaveCount(1) assertion catches.
+  const jwt = await page.evaluate((): string | null => {
+    const k = Object.keys(localStorage).find(
+      (key) => key.startsWith('sb-') && key.endsWith('-auth-token'),
+    )
+    return k
+      ? (JSON.parse(localStorage.getItem(k)!) as { access_token: string }).access_token
+      : null
+  })
+  if (jwt) {
+    await page.request.fetch(
+      'https://bucmxwutpfksjrylijeu.supabase.co/rest/v1/purchase?note=like.e2e-*',
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1Y214d3V0cGZrc2pyeWxpamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTg0OTEsImV4cCI6MjEwMTI3NDQ5MX0.SfVCrf11puAT6VnexFoyY9GSseUNvukzHqo7MUWr8vI',
+          Prefer: 'return=minimal',
+        },
+      },
+    )
+  }
 
   const category = page.getByLabel('Rayon')
   await category.selectOption({ index: 1 })
@@ -74,10 +102,21 @@ test('a retried submission does not post the purchase twice', async ({ signedIn:
   })
 
   await page.getByRole('button', { name: 'Enregistrer l’achat' }).click()
+
+  // Plausibility may interpose for a 0-stock entry; it never blocks (§3.2).
+  const gate1 = page.getByRole('button', { name: 'Enregistrer quand même' })
+  await gate1.waitFor({ timeout: 5000 }).catch(() => undefined)
+  if (await gate1.isVisible()) await gate1.click()
+
   await expect(page.getByRole('alert')).toBeVisible()
 
   // The shopkeeper presses save again, as anyone would.
   await page.getByRole('button', { name: 'Enregistrer l’achat' }).click()
+
+  // Plausibility may interpose again on the retry.
+  const gate2 = page.getByRole('button', { name: 'Enregistrer quand même' })
+  await gate2.waitFor({ timeout: 5000 }).catch(() => undefined)
+  if (await gate2.isVisible()) await gate2.click()
 
   // The replay is reported as a replay, not as a second purchase.
   await expect(page.getByRole('status')).toHaveText(
