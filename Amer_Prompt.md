@@ -158,6 +158,17 @@ read is a figure the owner does not have.
   repo — a whole-tree reformat buries your actual diff.
 - **Paths.** Everything in the docs is written POSIX-style. `~/projects/…` in an
   entry means the Hetzner box, not your disk.
+- **`userEvent` needs `{ delay: null }` on this machine.** The default 50 ms
+  key-repeat delay causes timeouts and wrong field values under parallel test
+  load. Any new interactive test must use `userEvent.setup({ delay: null })`, not
+  the bare `userEvent.setup()`. Every existing test already has this; if you add
+  one that doesn't, `npm run verify` may pass in isolation but fail under load.
+- **Lazy-loaded chunks don't resolve reliably under parallel test load.** The
+  `TrendChart` module is mocked in `DashboardPage.test.tsx` precisely because
+  recharts (385 kB, loaded via `React.lazy`) does not finish resolving within any
+  practical `findByRole` timeout on this machine. If you add another code-split
+  component that tests need to wait for, mock the module the same way rather than
+  raising the timeout further.
 
 ## Before you stop
 

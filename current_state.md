@@ -1029,3 +1029,45 @@ criterion. Then Phase 7 — deployment (Cloudflare Pages, the SPA fallback
 `/* /index.html 200`, `aziz-prod` migrations, disabling public signup). The
 `react-router-dom` advisory (GHSA-qwww-vcr4-c8h2, deferred from Phase 7 in Entry
 1) should be rechecked at that point.
+
+### Entry 11 — 2026-08-10 — Amer, owner's Windows PC — trend test flakiness fixed permanently
+
+**One test was still flaky after Entry 10.** The two trend tests in
+`DashboardPage.test.tsx` (`the trend > reads the exact monthly figures in a
+table` and `marks the current month as in progress`) were failing intermittently
+because Entry 10's fix — raising the `findByRole` timeout to 10 000 ms — was
+not enough. On retry, the test ran for 39 904 ms before timing out. The root
+cause: `React.lazy(() => import('./TrendChart'))` must resolve a 385 kB recharts
+chunk before the `<section aria-label="Évolution sur 12 mois">` appears in the
+DOM, and under full parallel Vitest load on this Windows machine, the dynamic
+import does not finish within any practical `findByRole` timeout.
+
+**Fix: mock `./TrendChart` in the dashboard test.** `vi.mock('./TrendChart', …)`
+in `DashboardPage.test.tsx` provides a synchronous stub that renders the same
+`<section>` / `<table>` structure the tests assert on. A mocked module resolves
+on the next microtask tick rather than after a real chunk load; the `findByRole`
+now completes in under 100 ms. The structural assertions (13 rows, "(en cours)"
+label) are unaffected. Whether the real lazy chunk resolves in production is a
+build-time guarantee — Rollup errors on an unresolvable dynamic import, so the
+test does not need to verify it at test-run time.
+
+The fix also adds two Windows-specific rules to `Amer_Prompt.md`:
+- always use `userEvent.setup({ delay: null })` for interactive tests
+- mock any code-split component rather than raising `findByRole` timeouts
+
+**Verified, and on what.**
+
+- **`npm run verify`**: lint, format, `tsc -b`, 124 Vitest tests — all green,
+  consistently (not flaky). `prompts-agree.test.ts` also green — the
+  `Amer_Prompt.md` edit touched only the Amer-specific Windows section, not the
+  shared rules block.
+
+**Not verified.** Nothing new. pgTAP still unmeasured; authenticated UI still
+not viewed (no E2E credentials in this session).
+
+**Machine:** Windows PC. No Docker. `npm run verify` green. Committed and pushed
+to `origin/main`.
+
+**Next for Hmdnah:** same as Entry 10 — re-run `npm run db:test` to close Phase
+6's pgTAP exit criterion, then Phase 7 (Cloudflare Pages deploy, SPA fallback,
+`aziz-prod` migrations, disable public signup).

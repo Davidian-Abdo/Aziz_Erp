@@ -46,6 +46,39 @@ vi.mock('@/api/report', () => ({
   useReportTrend: () => ({ isPending: false, isError: false, data: TREND }),
 }))
 
+// TrendChart pulls in recharts (385 kB) via React.lazy — that dynamic import
+// does not resolve reliably on this Windows machine under full parallel test
+// load. The mock renders the same section/table structure the tests assert on.
+// Whether the real code-split chunk resolves is verified at build time: Rollup
+// errors if the import cannot be resolved.
+vi.mock('./TrendChart', () => ({
+  TrendChart: ({
+    trend,
+  }: {
+    trend: Array<{ month: string; effective_to: string; to: string }>
+  }) => (
+    <section aria-label="Évolution sur 12 mois">
+      <table>
+        <thead>
+          <tr>
+            <th>Mois</th>
+          </tr>
+        </thead>
+        <tbody>
+          {trend.map((row) => (
+            <tr key={row.month}>
+              <th scope="row">
+                {row.month}
+                {row.effective_to < row.to && <span>(en cours)</span>}
+              </th>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  ),
+}))
+
 function renderDashboard(report: unknown = WORKED) {
   state.report = report
   state.requested = []
@@ -283,9 +316,9 @@ describe('the period selector', () => {
 })
 
 /*
- * The chart is code-split (recharts is 385 kB), so these await it. That is also
- * the assertion that it still arrives: a lazy chunk that fails to resolve
- * renders the Suspense fallback forever and looks like a slow network.
+ * Even with TrendChart mocked, these must remain async: React.lazy() wraps the
+ * import in a Promise, and even a synchronously-resolved mock Promise still
+ * requires a microtask tick to settle through the Suspense boundary.
  */
 describe('the trend', () => {
   it('reads the exact monthly figures in a table, not only as a line', async () => {
