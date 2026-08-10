@@ -390,6 +390,78 @@ export const fr = {
       settings: 'Les réglages arrivent en phase 6.',
     },
 
+    settings: {
+      title: 'Réglages',
+
+      general: {
+        title: 'Magasin',
+        storeName: 'Nom du magasin',
+        currencyCode: 'Devise',
+        locale: 'Langue',
+        timezone: 'Fuseau horaire',
+        save: 'Enregistrer',
+        saving: 'Enregistrement…',
+        saved: 'Réglages enregistrés.',
+        failed: 'L’enregistrement a échoué.',
+      },
+
+      categories: {
+        title: 'Rayons',
+        name: 'Nom',
+        description: 'Contenu (aide-mémoire)',
+        descriptionHint: 'Ex. : lait, fromage, yaourt, beurre',
+        edit: 'Modifier',
+        save: 'Enregistrer',
+        saving: 'Enregistrement…',
+        cancel: 'Annuler',
+        deactivate: 'Désactiver',
+        activate: 'Réactiver',
+        inactive: 'Désactivé',
+        add: 'Ajouter un rayon',
+        addTitle: 'Nouveau rayon',
+        nameRequired: 'Donnez un nom à ce rayon.',
+        failed: 'L’enregistrement a échoué.',
+      },
+
+      markups: {
+        title: 'Marges',
+        pctLabel: 'Marge (%)',
+        // domain-spec §1.3: markup-on-cost convention, with a live worked example.
+        convention:
+          'Marge sur le prix d’achat. Pour une marge de {{pct, number}} % : achetez à 100, vendez estimé à {{sell, number}}.',
+        // Changing a rate does NOT affect past reports (080_markup.sql proves it);
+        // the note is about the effective date only.
+        effectiveNote:
+          'Ce changement s’applique à partir d’aujourd’hui. Les rapports passés ne sont pas affectés.',
+        save: 'Enregistrer la marge',
+        saving: 'Enregistrement…',
+        saved: 'Marge enregistrée.',
+        failed: 'L’enregistrement a échoué.',
+        historyTitle: 'Historique',
+        effectiveFrom: 'depuis le {{date}}',
+        noRate: 'Aucune marge définie.',
+        notANumber: 'Cette valeur n’est pas un nombre.',
+        negative: 'La marge ne peut pas être négative.',
+        tooPrecise: 'Deux décimales au maximum.',
+      },
+
+      chargeCategories: {
+        title: 'Types de dépenses',
+        edit: 'Modifier',
+        save: 'Enregistrer',
+        saving: 'Enregistrement…',
+        cancel: 'Annuler',
+        deactivate: 'Désactiver',
+        activate: 'Réactiver',
+        inactive: 'Désactivé',
+        system: '(type système)',
+        add: 'Ajouter un type',
+        addTitle: 'Nouveau type de dépense',
+        nameRequired: 'Donnez un nom.',
+        failed: 'L’enregistrement a échoué.',
+      },
+    },
+
     error: {
       title: 'Une erreur est survenue',
       retry: 'Réessayer',

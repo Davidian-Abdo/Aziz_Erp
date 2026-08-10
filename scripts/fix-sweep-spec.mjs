@@ -1,15 +1,16 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const Q  = String.fromCharCode(0x0027)  // ' ASCII single quote (string delimiter)
-const AP = String.fromCharCode(0x2019)  // ' RIGHT SINGLE QUOTATION MARK (French apostrophe)
-const EM = String.fromCharCode(0x2014)  // — EM DASH
-const SS = String.fromCharCode(0x00A7)  // § section sign
-const EA = String.fromCharCode(0x00EA)  // ê (in même)
-const EG = String.fromCharCode(0x00E9)  // é (in enregistré, été, compté)
-const BT = String.fromCharCode(0x0060)  // ` backtick
+const Q = String.fromCharCode(0x0027) // ' ASCII single quote (string delimiter)
+const AP = String.fromCharCode(0x2019) // ' RIGHT SINGLE QUOTATION MARK (French apostrophe)
+const EM = String.fromCharCode(0x2014) // — EM DASH
+const SS = String.fromCharCode(0x00a7) // § section sign
+const EA = String.fromCharCode(0x00ea) // ê (in même)
+const EG = String.fromCharCode(0x00e9) // é (in enregistré, été, compté)
+const BT = String.fromCharCode(0x0060) // ` backtick
 
 const SUPABASE_URL = 'https://bucmxwutpfksjrylijeu.supabase.co'
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1Y214d3V0cGZrc2pyeWxpamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTg0OTEsImV4cCI6MjEwMTI3NDQ5MX0.SfVCrf11puAT6VnexFoyY9GSseUNvukzHqo7MUWr8vI'
+const ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1Y214d3V0cGZrc2pyeWxpamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTg0OTEsImV4cCI6MjEwMTI3NDQ5MX0.SfVCrf11puAT6VnexFoyY9GSseUNvukzHqo7MUWr8vI'
 
 // ── Template-literal helper lines ────────────────────────────────────────────
 // These use ${BT}…${BT} to embed backtick-delimited template literals in the
@@ -20,12 +21,12 @@ const nComptageLine = `  await expect(page.getByRole(${Q}status${Q})).toHaveText
 
 // `https://…/stock_count?occurred_on=eq.${today}&source=eq.standalone`
 const sweepDeleteUrl = `      ${BT}${SUPABASE_URL}/rest/v1/stock_count?occurred_on=eq.\${today}&source=eq.standalone${BT},`
-const sweepAuthLine  = `          Authorization: ${BT}Bearer \${sweepJwt}${BT},`
+const sweepAuthLine = `          Authorization: ${BT}Bearer \${sweepJwt}${BT},`
 
 // `https://…/stock_count?category_id=eq.${categoryId}&occurred_on=eq.2026-08-07&source=eq.standalone`
-const lossDeleteUrl  = `      ${Q}${SUPABASE_URL}/rest/v1/stock_count${Q} +`
-const lossDeleteQs   = `        ${BT}?category_id=eq.\${categoryId}&occurred_on=eq.2026-08-07&source=eq.standalone${BT},`
-const lossAuthLine   = `          Authorization: ${BT}Bearer \${jwt}${BT},`
+const lossDeleteUrl = `      ${Q}${SUPABASE_URL}/rest/v1/stock_count${Q} +`
+const lossDeleteQs = `        ${BT}?category_id=eq.\${categoryId}&occurred_on=eq.2026-08-07&source=eq.standalone${BT},`
+const lossAuthLine = `          Authorization: ${BT}Bearer \${jwt}${BT},`
 
 const file = 'e2e/sweep.spec.ts'
 
@@ -182,4 +183,7 @@ console.log('n-line:       ', JSON.stringify(lines.find((l) => l.includes('compt
 console.log('sweep-del-url:', JSON.stringify(lines.find((l) => l.includes('occurred_on=eq.'))))
 console.log('loss-del-url: ', JSON.stringify(lines.find((l) => l.includes('category_id=eq.'))))
 console.log('sweep-auth:   ', JSON.stringify(lines.find((l) => l.includes('sweepJwt'))))
-console.log('loss-auth:    ', JSON.stringify(lines.find((l) => l.includes('Bearer') && l.includes('jwt'))))
+console.log(
+  'loss-auth:    ',
+  JSON.stringify(lines.find((l) => l.includes('Bearer') && l.includes('jwt'))),
+)

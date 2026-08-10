@@ -49,7 +49,8 @@ test('a sweep writes every shelf on one date, and offers the loss prompt', async
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${sweepJwt}`,
-          apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1Y214d3V0cGZrc2pyeWxpamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTg0OTEsImV4cCI6MjEwMTI3NDQ5MX0.SfVCrf11puAT6VnexFoyY9GSseUNvukzHqo7MUWr8vI',
+          apikey:
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1Y214d3V0cGZrc2pyeWxpamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTg0OTEsImV4cCI6MjEwMTI3NDQ5MX0.SfVCrf11puAT6VnexFoyY9GSseUNvukzHqo7MUWr8vI',
           Prefer: 'return=minimal',
         },
       },
@@ -90,9 +91,7 @@ test('the loss prompt leads to the loss screen', async ({ signedIn: page }) => {
   await page.goto('/counts')
 
   await page.getByLabel('Rayon').selectOption({ index: 1 })
-  const categoryId = await page
-    .getByLabel('Rayon')
-    .evaluate((el: HTMLSelectElement) => el.value)
+  const categoryId = await page.getByLabel('Rayon').evaluate((el: HTMLSelectElement) => el.value)
 
   // Delete any prior run’s count so this test is idempotent across runs.
   // Without this, a second run hits unique(category, date, source='standalone').

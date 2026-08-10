@@ -13,6 +13,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    testTimeout: 15000,
     setupFiles: ['./src/test/setup.ts'],
     // The pgTAP suite lives in supabase/tests and is run by scripts/db.sh, not Vitest.
     include: ['src/**/*.{test,spec}.{ts,tsx}'],

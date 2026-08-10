@@ -11,7 +11,7 @@ import { PurchasePage } from '@/features/purchases/PurchasePage'
 import { ChargesPage } from '@/features/charges/ChargesPage'
 import { CountsPage } from '@/features/counts/CountsPage'
 import { LossesPage } from '@/features/losses/LossesPage'
-import { PlaceholderPage } from '@/features/PlaceholderPage'
+import { SettingsPage } from '@/features/settings/SettingsPage'
 
 /*
  * Three gates, in this order — each one only makes sense once the previous
@@ -86,10 +86,7 @@ function SignedIn() {
             <Route path="/charges" element={<ChargesPage />} />
             <Route path="/counts" element={<CountsPage />} />
             <Route path="/losses" element={<LossesPage />} />
-            <Route
-              path="/settings"
-              element={<PlaceholderPage titleKey="nav.settings" bodyKey="placeholder.settings" />}
-            />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

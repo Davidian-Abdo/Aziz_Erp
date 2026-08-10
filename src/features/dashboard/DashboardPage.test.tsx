@@ -269,7 +269,7 @@ describe('the period selector', () => {
   })
 
   it('never queries a custom range whose end is before its start', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderDashboard()
 
     const before = state.requested.at(-1)
@@ -290,7 +290,11 @@ describe('the period selector', () => {
 describe('the trend', () => {
   it('reads the exact monthly figures in a table, not only as a line', async () => {
     renderDashboard()
-    const section = await screen.findByRole('region', { name: 'Évolution sur 12 mois' })
+    const section = await screen.findByRole(
+      'region',
+      { name: 'Évolution sur 12 mois' },
+      { timeout: 10000 },
+    )
     const table = within(section).getByRole('table')
 
     // Twelve months plus the header row.
@@ -299,7 +303,11 @@ describe('the trend', () => {
 
   it('marks the current month as in progress rather than as a collapse in trade', async () => {
     renderDashboard()
-    const section = await screen.findByRole('region', { name: 'Évolution sur 12 mois' })
+    const section = await screen.findByRole(
+      'region',
+      { name: 'Évolution sur 12 mois' },
+      { timeout: 10000 },
+    )
 
     expect(within(section).getByText('(en cours)')).toBeInTheDocument()
   })

@@ -106,7 +106,7 @@ beforeEach(() => {
 
 describe('the purchase is the category’s newest event', () => {
   it('asks for the WHOLE shelf and lists what is on it', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
     await fillDetails(user)
 
@@ -119,7 +119,7 @@ describe('the purchase is the category’s newest event', () => {
   })
 
   it('records 0 when the shelf was empty — a count, not a skipped question', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
     await fillDetails(user)
 
@@ -131,7 +131,7 @@ describe('the purchase is the category’s newest event', () => {
   })
 
   it('sends the value that was counted', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
     await fillDetails(user)
 
@@ -147,7 +147,7 @@ describe('the purchase is the category’s newest event', () => {
 describe('the purchase is backdated (domain-spec §3.2, plan §2.4)', () => {
   it('explains that no count will be recorded, and attaches none', async () => {
     state.lastCountOn = '2026-08-02'
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
 
     // Dated the 1st, behind the last count on the 2nd.
@@ -174,7 +174,7 @@ describe('the purchase is backdated (domain-spec §3.2, plan §2.4)', () => {
    */
   it('still asks the question when the purchase is dated ON the last count', async () => {
     state.lastCountOn = '2026-08-03'
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
     await fillDetails(user)
 
@@ -186,7 +186,7 @@ describe('the purchase is backdated (domain-spec §3.2, plan §2.4)', () => {
 describe('the plausibility check (domain-spec §3.2, plan §2.3c)', () => {
   it('blocks with Corriger as the primary action and writes nothing', async () => {
     state.verdict = 'exceeds_bound'
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
     await fillDetails(user)
 
@@ -207,7 +207,7 @@ describe('the plausibility check (domain-spec §3.2, plan §2.3c)', () => {
 
   it('never prevents saving — the user may simply be right', async () => {
     state.verdict = 'suspicious_drop'
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
     await fillDetails(user)
 
@@ -226,7 +226,7 @@ describe('the plausibility check (domain-spec §3.2, plan §2.3c)', () => {
 describe('idempotency (domain-spec §8.1, plan §2.12)', () => {
   it('reuses one request_id across retries of the same purchase', async () => {
     state.succeeds = false // every attempt "fails" — the retry path
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
     await fillDetails(user)
 
@@ -244,7 +244,7 @@ describe('idempotency (domain-spec §8.1, plan §2.12)', () => {
   })
 
   it('takes a NEW request_id for the next purchase', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderPage()
 
     await fillDetails(user)

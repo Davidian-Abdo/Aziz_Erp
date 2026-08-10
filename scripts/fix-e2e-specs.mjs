@@ -1,11 +1,11 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const Q  = String.fromCharCode(0x0027)  // ' ASCII single quote (string delimiter)
-const AP = String.fromCharCode(0x2019)  // ' RIGHT SINGLE QUOTATION MARK (French apostrophe)
-const EM = String.fromCharCode(0x2014)  // — EM DASH
-const EA = String.fromCharCode(0x00EA)  // ê (e with circumflex, in "même")
-const EG = String.fromCharCode(0x00E9)  // é (e with acute, in "enregistré")
-const SS = String.fromCharCode(0x00A7)  // § section sign
+const Q = String.fromCharCode(0x0027) // ' ASCII single quote (string delimiter)
+const AP = String.fromCharCode(0x2019) // ' RIGHT SINGLE QUOTATION MARK (French apostrophe)
+const EM = String.fromCharCode(0x2014) // — EM DASH
+const EA = String.fromCharCode(0x00ea) // ê (e with circumflex, in "même")
+const EG = String.fromCharCode(0x00e9) // é (e with acute, in "enregistré")
+const SS = String.fromCharCode(0x00a7) // § section sign
 
 // ── purchase.spec.ts ────────────────────────────────────────────────────────
 const pFile = 'e2e/purchase.spec.ts'

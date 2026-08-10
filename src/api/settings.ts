@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { todayInTimezone } from '@/lib/dates'
 import type { DisplaySettings } from '@/lib/display-settings'
@@ -68,6 +68,32 @@ export function useStoreToday(): string {
  * on screen: every table returns empty, no error is raised, and the owner has no
  * way to tell a permission problem from an empty database.
  */
+export function useUpdateSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      storeName?: string
+      currencyCode?: string
+      locale?: string
+      timezone?: string
+    }) => {
+      const { error } = await supabase
+        .from('app_settings')
+        .update({
+          ...(input.storeName !== undefined && { store_name: input.storeName }),
+          ...(input.currencyCode !== undefined && { currency_code: input.currencyCode }),
+          ...(input.locale !== undefined && { locale: input.locale }),
+          ...(input.timezone !== undefined && { timezone: input.timezone }),
+        })
+        .eq('id', 1)
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: settingsQueryKey })
+    },
+  })
+}
+
 export function useIsAllowlisted() {
   return useQuery({
     queryKey: allowlistQueryKey,

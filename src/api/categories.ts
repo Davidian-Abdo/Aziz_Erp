@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
 export type Category = {
@@ -35,5 +35,54 @@ export function useCategories(includeInactive = false) {
       }))
     },
     staleTime: 5 * 60_000,
+  })
+}
+
+export function useCreateCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { name: string; description: string }): Promise<Category> => {
+      const { data, error } = await supabase
+        .from('article_category')
+        .insert({ name: input.name, description: input.description })
+        .select('id, name, description, active, sort_order')
+        .single()
+      if (error) throw error
+      return {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        active: data.active,
+        sortOrder: data.sort_order,
+      }
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: categoriesQueryKey })
+    },
+  })
+}
+
+export function useUpdateCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      name?: string
+      description?: string
+      active?: boolean
+    }) => {
+      const { error } = await supabase
+        .from('article_category')
+        .update({
+          ...(input.name !== undefined && { name: input.name }),
+          ...(input.description !== undefined && { description: input.description }),
+          ...(input.active !== undefined && { active: input.active }),
+        })
+        .eq('id', input.id)
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: categoriesQueryKey })
+    },
   })
 }

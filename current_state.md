@@ -912,3 +912,120 @@ problem was worked around. `npm run verify` green. Committed and pushed to
 needs Docker and a bash shell for `npm run db:test`; if Docker is not available,
 say so plainly in the entry rather than shipping Phase 6 with its pgTAP exit
 criterion unmeasured.
+
+### Entry 10 — 2026-08-10 — Amer, owner's Windows PC — app viewed; Phase 6 built; pgTAP exit criterion unmeasured
+
+**Phase 6 (settings) is built and green.** `npm run verify` passes — lint,
+format, `tsc -b`, **124 tests across 16 files** (was 119 across 15). `npm run
+build` clean (708 kB / 199 kB gzipped; the 708 kB chunk size warning is
+pre-existing from Phase 5).
+
+**The login screen was viewed via Playwright screenshot** on the running dev
+server. It renders correctly: title "Aziz ERP", subtitle "Cet espace est réservé
+au gérant du magasin", email/password fields, "Se connecter" button. No login
+credentials were available in this session (no `E2E_EMAIL`/`E2E_PASSWORD`), so
+the authenticated screens could not be viewed. The component tests covering every
+authenticated screen were all green, including the 5 new settings tests.
+
+**What was built for Phase 6.**
+
+| File | What it is |
+|---|---|
+| `src/api/markup.ts` | `useMarkupRates`, `useSetMarkupRate` — upserts on `(category_id, effective_from)` |
+| `src/api/categories.ts` | Added `useCreateCategory`, `useUpdateCategory` |
+| `src/api/charges.ts` | Added `useAllChargeCategories`, `useCreateChargeCategory`, `useUpdateChargeCategory`, `ChargeCategoryFull` |
+| `src/api/settings.ts` | Added `useUpdateSettings` |
+| `src/features/settings/SettingsPage.tsx` | Four sections: General, Categories (Rayons), Markups (Marges), Charge categories |
+| `src/features/settings/SettingsPage.test.tsx` | 5 tests: headings render, markup save path, worked example, category toggle, inactive display |
+| `src/i18n/fr.ts` | `settings.*` namespace added |
+| `src/App.tsx` | Settings route replaced `<PlaceholderPage>` with `<SettingsPage>` |
+
+**The markup section in detail.** domain-spec §1.3 requires the markup-on-cost
+convention to be stated next to the input with a live worked example. The input
+accepts a percentage; as the user types, the component shows *"Pour une marge de
+20 % : achetez à 100, vendez estimé à 120"*. On save, `useSetMarkupRate` upserts
+into `markup_rate` on `(category_id, effective_from)` where `effective_from` is
+today. The history of prior rates is accessible behind a toggle. The convention
+note warns that the change applies from today and past reports are unaffected —
+this is not defensive copy, it is what `080_markup.sql` proves.
+
+**⚠ pgTAP exit criterion: UNMEASURED.** Docker is not configured on this
+machine and `scripts/db.sh` requires a bash shell. The normative assertion is
+`080_markup.sql` in the 275-assertion suite, which runs `report_period` over a
+specific ledger before and after a `markup_rate` INSERT, and asserts byte-for-byte
+equality. That suite was proven green in Entry 4 (against the Supabase dev
+project) and Entry 7 (against the local container), both before Phase 6 touched
+anything. The mutation path writes a NEW row on the conflict key
+`(category_id, effective_from)` — it does not update an existing rate — and
+`markup_at()` resolves the rate at a window's open date, not at query time, which
+is exactly the design that makes past reports immutable. The code path is correct
+and the pgTAP fixture covers it, but the suite has not been re-run this session.
+**Hmdnah must re-run `npm run db:test` before Phase 6 can be called fully
+closed.**
+
+**Three test infrastructure fixes alongside Phase 6.**
+
+1. **Remaining `userEvent.setup()` without `{ delay: null }`** in
+   `ChargesPage.test.tsx` (3 tests), `DashboardPage.test.tsx` (1 remaining after
+   Entry 9), and `PurchasePage.test.tsx` (all 9 tests). Same class as Entry 9's
+   DashboardPage fix — the default 50ms key-repeat delay causes timeouts and
+   wrong field values on this machine.
+
+2. **`testTimeout` raised to 15 000 ms** in `vite.config.ts`. The `no-raw-money`
+   grep walks the entire `src/` tree; under full parallel test load the filesystem
+   scan was crossing the 5 000 ms default. The grep itself takes ~700 ms idle;
+   the raise gives headroom without hiding real failures.
+
+3. **Recharts `findByRole` timeout raised to 10 000 ms** in
+   `DashboardPage.test.tsx`. The `{ delay: null }` fix in point 1 made the
+   preceding tests run ~4 s faster. Recharts (385 kB) lazy-loads once per test
+   file, and those 4 s had been incidentally giving it time to cache before the
+   trend tests ran. With the tests faster, the trend tests now see an uncached
+   chunk and needed a longer `findByRole` timeout.
+
+4. **`renders all four section headings`** in `SettingsPage.test.tsx` made
+   `async` with `waitFor`. React 18's `act()` is async; a synchronous render-only
+   test that triggers `useEffect` state updates leaves pending microtasks open,
+   which Vitest treats as a hang.
+
+5. **`shows inactive categories as inactive`** changed from `getByText('Tabac')`
+   to `getAllByText('Tabac')`. Tabac appears in both the Categories section (where
+   it is shown as inactive) and the Markups section (where the mock ignores the
+   `includeInactive` argument), so `getByText` throws "Found multiple elements".
+
+**A TypeScript note.** Supabase's generated types use a `RejectExcessProperties`
+utility that rejects `Record<string, unknown>` as an update payload because the
+index signature type `unknown` is not assignable to `never`. All three update
+mutations (`useUpdateCategory`, `useUpdateChargeCategory`, `useUpdateSettings`)
+use the inline spread pattern:
+```typescript
+.update({
+  ...(input.name !== undefined && { name: input.name }),
+  ...
+})
+```
+rather than building an intermediate object — this is the only form the
+generated types accept for partial updates.
+
+**Verified, and on what.**
+
+- **`npm run verify`**: lint, format, `tsc -b`, 124 Vitest tests — all green.
+- **`npm run build`**: production bundle, clean.
+- **Login screen** rendered in Chromium via Playwright screenshot — correct.
+
+**Not verified.**
+
+- **The authenticated app screens** (dashboard, entries, settings) were not
+  viewed. No E2E credentials available in this session.
+- **pgTAP suite** — Docker not configured on this machine. See exit criterion note
+  above.
+
+**Machine:** Windows PC. No Docker. No container created or started. Dev server
+started on :5173 for screenshot, then stopped. `npm run verify` green. Committed
+and pushed to `origin/main`.
+
+**Next for Hmdnah:** re-run `npm run db:test` to close Phase 6's pgTAP exit
+criterion. Then Phase 7 — deployment (Cloudflare Pages, the SPA fallback
+`/* /index.html 200`, `aziz-prod` migrations, disabling public signup). The
+`react-router-dom` advisory (GHSA-qwww-vcr4-c8h2, deferred from Phase 7 in Entry
+1) should be rechecked at that point.

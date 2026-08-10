@@ -71,7 +71,7 @@ beforeEach(() => {
 })
 
 it('records a charge against the chosen category', async () => {
-  const user = userEvent.setup()
+  const user = userEvent.setup({ delay: null })
   render(<ChargesPage />)
 
   await user.selectOptions(screen.getByLabelText('Type de dépense'), CATEGORIES[0]!.id)
@@ -87,7 +87,7 @@ it('records a charge against the chosen category', async () => {
 })
 
 it('creates a category inline, in plain language, and selects it', async () => {
-  const user = userEvent.setup()
+  const user = userEvent.setup({ delay: null })
   render(<ChargesPage />)
 
   await user.click(screen.getByRole('button', { name: '+ Nouveau type de dépense' }))
@@ -112,7 +112,7 @@ it('creates a category inline, in plain language, and selects it', async () => {
 })
 
 it('refuses a charge with no category rather than guessing one', async () => {
-  const user = userEvent.setup()
+  const user = userEvent.setup({ delay: null })
   render(<ChargesPage />)
 
   await user.type(screen.getByLabelText('Montant'), '1200')

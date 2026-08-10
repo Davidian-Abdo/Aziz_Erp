@@ -50,6 +50,58 @@ export function useChargeCategories() {
   })
 }
 
+export type ChargeCategoryFull = ChargeCategory & { active: boolean }
+
+export const allChargeCategoriesQueryKey = ['charge_category', 'all'] as const
+
+export function useAllChargeCategories() {
+  return useQuery({
+    queryKey: allChargeCategoriesQueryKey,
+    queryFn: async (): Promise<ChargeCategoryFull[]> => {
+      const { data, error } = await supabase
+        .from('charge_category')
+        .select('id, name, nature, is_system, active')
+        .order('sort_order')
+        .order('name')
+      if (error) throw error
+      return data.map((row) => ({
+        id: row.id,
+        name: row.name,
+        nature: row.nature,
+        isSystem: row.is_system,
+        active: row.active,
+      }))
+    },
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useUpdateChargeCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      name?: string
+      nature?: ChargeNature
+      active?: boolean
+    }) => {
+      const { error } = await supabase
+        .from('charge_category')
+        .update({
+          ...(input.name !== undefined && { name: input.name }),
+          ...(input.nature !== undefined && { nature: input.nature }),
+          ...(input.active !== undefined && { active: input.active }),
+        })
+        .eq('id', input.id)
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: chargeCategoriesQueryKey })
+      await qc.invalidateQueries({ queryKey: allChargeCategoriesQueryKey })
+    },
+  })
+}
+
 /**
  * Inline creation, without leaving the form (§8.2).
  *

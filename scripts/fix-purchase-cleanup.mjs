@@ -1,11 +1,12 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const Q  = String.fromCharCode(0x0027)  // ' ASCII single quote
-const AP = String.fromCharCode(0x2019)  // ' RIGHT SINGLE QUOTATION MARK
-const BT = String.fromCharCode(0x0060)  // ` backtick
+const Q = String.fromCharCode(0x0027) // ' ASCII single quote
+const AP = String.fromCharCode(0x2019) // ' RIGHT SINGLE QUOTATION MARK
+const BT = String.fromCharCode(0x0060) // ` backtick
 
 const SUPABASE_URL = 'https://bucmxwutpfksjrylijeu.supabase.co'
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1Y214d3V0cGZrc2pyeWxpamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTg0OTEsImV4cCI6MjEwMTI3NDQ5MX0.SfVCrf11puAT6VnexFoyY9GSseUNvukzHqo7MUWr8vI'
+const ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1Y214d3V0cGZrc2pyeWxpamV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTg0OTEsImV4cCI6MjEwMTI3NDQ5MX0.SfVCrf11puAT6VnexFoyY9GSseUNvukzHqo7MUWr8vI'
 
 const file = 'e2e/purchase.spec.ts'
 let src = readFileSync(file, 'utf8')
@@ -37,7 +38,7 @@ if (gotoIdx === -1) {
 const gotoEnd = gotoIdx + gotoPattern.length
 
 // Build the cleanup block
-const authLine   = `          Authorization: ${BT}Bearer \${jwt}${BT},`
+const authLine = `          Authorization: ${BT}Bearer \${jwt}${BT},`
 const cleanupBlock = [
   ``,
   `  // Delete any purchases from previous test runs that would inflate the count.`,
