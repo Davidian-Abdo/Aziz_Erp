@@ -121,6 +121,19 @@ test` — and `reset` is refused there on purpose.
 
 ## What your machine can do that the other cannot
 
+**You can run the local pgTAP suite.** Docker Desktop is installed on this
+machine (confirmed 2026-08-10). Run all `db:*` commands from **Git Bash** or
+**WSL2** — `scripts/db.sh` is bash and will not run from PowerShell or cmd.
+Start Docker Desktop first, then:
+
+```bash
+npm run db:up    # start the aziz_erp_pg container (port 5434)
+npm run db:test  # 275 pgTAP assertions
+```
+
+Phases whose exit criterion is a pgTAP suite run must be closed here, in this
+entry — do not defer them to Hmdnah.
+
 **You can run the browser tests, and nobody ever has.** `npm run test:e2e` needs
 `npx playwright install chromium` once, and then three things the repo cannot
 give you:
@@ -148,10 +161,10 @@ read is a figure the owner does not have.
 ## What to watch for on Windows
 
 - **`scripts/db.sh` is bash.** `npm run db:up` / `db:reset` / `db:test` will not
-  run in `cmd` or PowerShell. Use **Git Bash** or **WSL2**, with Docker running.
-  If Docker is not available to you at all, say so plainly in your entry: the
-  pgTAP suite is the layer that matters and "I could not run it" is a fact the
-  next session needs, not a gap to paper over.
+  run in `cmd` or PowerShell — use **Git Bash** or **WSL2**. Docker Desktop is
+  installed on this machine; make sure it is running before calling any `db:*`
+  command. The container is `aziz_erp_pg` on port 5434; `npm run db:up` creates
+  it if it does not yet exist.
 - **Line endings.** This repo is Prettier-checked in `npm run verify`. If git
   rewrites line endings on checkout, `format:check` fails on files you never
   touched. Fix it at the git level (`core.autocrlf`), never by reformatting the

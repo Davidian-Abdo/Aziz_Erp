@@ -44,7 +44,7 @@ same commit, or the suite fails and names the line.
 |---|---|---|
 | Machine | Hetzner dev box (Linux) | The owner's Windows PC |
 | Browser | **None.** No Chromium for Ubuntu 26.04, no system Chrome | **Yes** |
-| Docker / local Postgres | Yes (`aziz_erp_pg`, see §3) | Needs Docker + a bash shell for `scripts/db.sh` |
+| Docker / local Postgres | Yes (`aziz_erp_pg`, see §3) | Docker Desktop installed (2026-08-10). Use Git Bash or WSL2 for `scripts/db.sh`. Same container name / port as §3. |
 | Box-local docs | `cross_projects_policy.md`, `last_session_work.md` — **not in git**, do not exist for Amer | — |
 
 Roles are symmetric and fluid; the **machine** is what differs. That difference
@@ -68,9 +68,9 @@ contains **no accounting arithmetic whatsoever**; it renders what the
 
 ## 3. Environment — the Hetzner dev box
 
-*(Amer: this section describes Hmdnah's machine. Yours is in `Amer_Prompt.md`,
-and the one thing that does not travel with a pull is `.env` — it is gitignored,
-so the Supabase URL and anon key have to come from the owner.)*
+*(Amer: this section describes Hmdnah's machine. Your machine's environment is
+in §3b below. The one thing that does not travel with a pull is `.env` — it is
+gitignored, so the Supabase URL and anon key have to come from the owner.)*
 
 **Local dev database** (plan §3, decision D-D): container `aziz_erp_pg`,
 `supabase/postgres:17.6.1.158`, host port **5434**, volume `aziz_erp_pg_data`,
@@ -98,6 +98,34 @@ project's extension set and role model are what production actually runs.
 
 Toolchain: Node 20.20.2 / npm 10.8.2 (present on the box), Supabase CLI 2.111.0
 installed user-local at `~/bin/supabase` (no sudo, same pattern as `gh`).
+
+## 3b. Environment — the Windows PC (Amer's machine)
+
+**Docker Desktop is installed** (confirmed 2026-08-10). The local database
+container and pgTAP suite work identically to §3:
+
+```bash
+npm run db:up    # start aziz_erp_pg in Docker Desktop
+npm run db:reset # drop schema, replay all migrations + seed
+npm run db:test  # run the 275-assertion pgTAP suite
+npm run db:psql  # interactive shell
+```
+
+**Shell requirement:** `scripts/db.sh` is bash. All `db:*` commands must be run
+in **Git Bash** or **WSL2** — they will fail silently or not at all from
+PowerShell or cmd. Make sure Docker Desktop is running before calling any of
+them.
+
+**Container:** same name and port as the Hetzner box — `aziz_erp_pg`,
+`supabase/postgres:17.6.1.158`, host port **5434**, volume `aziz_erp_pg_data`.
+If the container does not exist yet on this machine, `npm run db:up` creates and
+seeds it from scratch.
+
+**pgTAP is now Amer's to run.** Phases that have a pgTAP exit criterion must be
+closed here, not deferred to Hmdnah. The pattern: `npm run db:up` once per
+session (if the container is not already running), then `npm run db:test`. A
+passing run writes the green count to the entry; a failing run says which test
+failed and why.
 
 ---
 
@@ -1071,3 +1099,45 @@ to `origin/main`.
 **Next for Hmdnah:** same as Entry 10 — re-run `npm run db:test` to close Phase
 6's pgTAP exit criterion, then Phase 7 (Cloudflare Pages deploy, SPA fallback,
 `aziz-prod` migrations, disable public signup).
+
+### Entry 12 — 2026-08-10 — Amer, owner's Windows PC — Docker Desktop available; pgTAP now Amer's to run
+
+**Docker Desktop is now installed on this machine.** All `db:*` commands are
+available to Amer from this session forward. This changes the division of
+responsibility: pgTAP exit criteria are no longer deferred to Hmdnah — they must
+be run and recorded here.
+
+**What was updated.**
+
+- `current_state.md` §1b table: Amer's Docker row updated from "Needs Docker +
+  a bash shell" to "Docker Desktop installed (2026-08-10)".
+- `current_state.md` §3b: new section describing Amer's machine environment —
+  container name, port, shell requirement, and the standing instruction that
+  pgTAP phases are closed here.
+- `Amer_Prompt.md` — "What your machine can do that the other cannot": new
+  leading paragraph on Docker + pgTAP, with the two commands and the rule that
+  pgTAP exit criteria must be measured in the same session that ships the phase.
+- `Amer_Prompt.md` — "What to watch for on Windows": Docker note updated from
+  "if Docker is not available, say so" to "Docker Desktop is installed; start it
+  before calling any `db:*` command".
+
+**Immediate consequence for Phase 6.** Entry 10 shipped the settings screen but
+left the pgTAP exit criterion (`080_markup.sql`) unmeasured and deferred to
+Hmdnah. That deferral is now void. **The next Amer session must:**
+1. Start Docker Desktop.
+2. Open Git Bash (or WSL2) in the project root.
+3. Run `npm run db:up` (creates/starts `aziz_erp_pg` on port 5434).
+4. Run `npm run db:test` and record the result.
+5. If all 275 assertions pass, Phase 6 is fully closed and Phase 7 can begin.
+
+**Not verified.** No code was changed; `npm run verify` was not re-run (no
+source files touched). No container was started yet — Docker Desktop was
+confirmed installed but the next session should do the first `db:up` when it
+actually intends to run the suite, not as a speculative check.
+
+**Machine:** Windows PC. Docker Desktop installed, not yet started this session.
+Committed and pushed to `origin/main`.
+
+**Next for Amer:** start Docker Desktop, run `npm run db:test` in Git Bash, close
+Phase 6, then proceed to Phase 7. Hmdnah no longer needs to be the one to run
+the pgTAP suite.
