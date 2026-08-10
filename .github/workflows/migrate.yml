@@ -1,0 +1,24 @@
+# Applies pending migrations to the aziz-prod Supabase project.
+# Run manually from GitHub Actions after creating aziz-prod, or after any
+# new migration is added that needs to reach production before the next deploy.
+#
+# Required GitHub secrets:
+#   SUPABASE_ACCESS_TOKEN   Personal access token from supabase.com/dashboard/account/tokens
+#   PROD_PROJECT_ID         aziz-prod project ref (the part before .supabase.co)
+#   PROD_DB_PASSWORD        aziz-prod database password
+name: Migrate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push migrations to aziz-prod
+        run: npx supabase db push --project-ref ${{ secrets.PROD_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}

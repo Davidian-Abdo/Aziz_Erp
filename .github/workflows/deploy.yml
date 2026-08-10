@@ -1,0 +1,44 @@
+# Lint + typecheck + test + build, then deploy to Cloudflare Pages.
+# Triggered on every push to main.
+#
+# Required GitHub secrets:
+#   CF_API_TOKEN        Cloudflare API token with Pages:Edit permission
+#   CF_ACCOUNT_ID       Cloudflare account ID (right sidebar on cloudflare.com)
+#
+# The build reads VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from repository
+# variables (Settings → Secrets and variables → Variables, not Secrets).
+# These are the aziz-prod values once that project is created.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Verify (lint + format + tsc + vitest)
+        run: npm run verify
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.PROD_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.PROD_SUPABASE_ANON_KEY }}
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=aziz-erp

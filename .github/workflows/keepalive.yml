@@ -1,0 +1,32 @@
+# Authenticates with the production Supabase project and calls store_today()
+# every 3 days. Free-tier Supabase projects pause after 7 idle days (§6.3).
+#
+# Required GitHub secrets:
+#   PROD_SUPABASE_URL        aziz-prod API URL (https://<ref>.supabase.co)
+#   PROD_SUPABASE_ANON_KEY   aziz-prod anon key
+#   KEEPALIVE_EMAIL          email of the allowlisted owner account
+#   KEEPALIVE_PASSWORD       password of that account
+name: Keepalive
+
+on:
+  schedule:
+    - cron: '0 9 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Authenticate and ping store_today
+        run: node scripts/keepalive.mjs
+        env:
+          PROD_SUPABASE_URL: ${{ secrets.PROD_SUPABASE_URL }}
+          PROD_SUPABASE_ANON_KEY: ${{ secrets.PROD_SUPABASE_ANON_KEY }}
+          KEEPALIVE_EMAIL: ${{ secrets.KEEPALIVE_EMAIL }}
+          KEEPALIVE_PASSWORD: ${{ secrets.KEEPALIVE_PASSWORD }}
