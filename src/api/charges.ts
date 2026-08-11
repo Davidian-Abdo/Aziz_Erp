@@ -130,6 +130,8 @@ export function useCreateChargeCategory() {
 
 export type ChargeRow = {
   id: string
+  /** Needed to prefill the form when this row is edited (domain-spec §8.5). */
+  categoryId: string
   categoryName: string
   nature: ChargeNature
   occurredOn: string
@@ -143,13 +145,14 @@ export function useRecentCharges(limit = 10) {
     queryFn: async (): Promise<ChargeRow[]> => {
       const { data, error } = await supabase
         .from('charge')
-        .select('id, occurred_on, amount, note, charge_category(name, nature)')
+        .select('id, charge_category_id, occurred_on, amount, note, charge_category(name, nature)')
         .order('occurred_on', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(limit)
       if (error) throw error
       return data.map((row) => ({
         id: row.id,
+        categoryId: row.charge_category_id,
         categoryName: row.charge_category?.name ?? '',
         nature: row.charge_category?.nature ?? 'operating',
         occurredOn: row.occurred_on,
@@ -176,6 +179,42 @@ export function useRecordCharge() {
         amount: input.amount,
         note: input.note,
       })
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await invalidateLedger(qc)
+    },
+  })
+}
+
+/**
+ * Correcting an existing charge (domain-spec §8.5).
+ *
+ * An ordinary PostgREST update, and it stays one: a charge is a single row with
+ * no companion and no cross-row invariant, so there is nothing for a
+ * transactional RPC to make atomic. The before/after pair is written to the
+ * audit log by the trigger of 0005, which is what §8.5 actually requires.
+ */
+export function useEditCharge() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      chargeCategoryId: string
+      date: string
+      amount: number
+      note: string | null
+    }) => {
+      const { error } = await supabase
+        .from('charge')
+        .update({
+          charge_category_id: input.chargeCategoryId,
+          occurred_on: input.date,
+          amount: input.amount,
+          note: input.note,
+        })
+        .eq('id', input.id)
       if (error) throw error
     },
     onSuccess: async () => {

@@ -23,12 +23,24 @@ export type LatestCount = { occurredOn: string; valueAtCost: number }
  * Two screens need it and for different reasons: the count form shows it beside
  * the input as the reference figure (§8.3), and the purchase form uses its date
  * to decide whether the embedded count is required at all (§3.2).
+ *
+ * ⚠ `excludeCountId` exists for exactly one caller and it is not an optimisation.
+ *
+ * When the purchase form is EDITING an existing purchase, the category's latest
+ * count is very often that purchase's own embedded count. Left in, the client
+ * compares the new date against a count that is about to move with it and
+ * concludes the purchase is backdated when it is not — so the form shows the
+ * "no count will be recorded" notice, saves with a null prior stock, and
+ * `edit_purchase` rejects it with "a count is required". The SQL excludes the
+ * purchase's own count from that maximum (0014_edit_rpcs.sql); this is the
+ * client half of the same rule, and the two have to agree or the form asks the
+ * wrong question.
  */
-export function useLatestCount(categoryId: string | null) {
+export function useLatestCount(categoryId: string | null, excludeCountId?: string | null) {
   return useQuery({
-    queryKey: latestCountKey(categoryId),
+    queryKey: latestCountKey(categoryId, excludeCountId ?? null),
     enabled: Boolean(categoryId),
-    queryFn: () => fetchLatestCount(categoryId as string),
+    queryFn: () => fetchLatestCount(categoryId as string, excludeCountId ?? null),
   })
 }
 
@@ -56,15 +68,20 @@ export function useLatestCounts(categoryIds: string[]) {
   return { byCategory, isPending: results.some((r) => r.isPending) }
 }
 
-function latestCountKey(categoryId: string | null) {
-  return [...countsQueryKey, 'latest', categoryId] as const
+function latestCountKey(categoryId: string | null, excludeCountId: string | null = null) {
+  return [...countsQueryKey, 'latest', categoryId, excludeCountId] as const
 }
 
-async function fetchLatestCount(categoryId: string): Promise<LatestCount | null> {
-  const { data, error } = await supabase
+async function fetchLatestCount(
+  categoryId: string,
+  excludeCountId: string | null = null,
+): Promise<LatestCount | null> {
+  let query = supabase
     .from('stock_count')
     .select('occurred_on, value_at_cost')
     .eq('category_id', categoryId)
+  if (excludeCountId) query = query.neq('id', excludeCountId)
+  const { data, error } = await query
     .order('occurred_on', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(1)
@@ -152,6 +169,50 @@ export function useRecordSweep() {
       })
       if (error) throw error
       return recordSweepResultSchema.parse(data)
+    },
+    onSuccess: async () => {
+      await invalidateLedger(qc)
+    },
+  })
+}
+
+/**
+ * Correcting an existing count (domain-spec §8.5).
+ *
+ * ⚠ `.eq('source', 'standalone')` is the same restriction `useDeleteCount` uses
+ * below, and here it is load-bearing rather than tidy. A count with
+ * `source = 'purchase'` describes the shelf before a specific delivery; moving
+ * its date or category away from that delivery corrupts the timeline silently,
+ * because `v_stock_event` takes the category from the count and the ordering
+ * anchor from the purchase. The database refuses it outright since
+ * 0014_edit_rpcs.sql — a deferred constraint trigger — but the filter keeps the
+ * screen from ever offering the user an action that can only fail. The way to
+ * move an embedded count is to edit its purchase, which moves both rows.
+ *
+ * The date is editable, and the unique index on (category, date) for standalone
+ * counts is what stops an edit landing on top of another count; that surfaces as
+ * a duplicate-key error, which `pg-errors.ts` already renders in French.
+ */
+export function useEditCount() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      categoryId: string
+      date: string
+      valueAtCost: number
+    }) => {
+      const { error } = await supabase
+        .from('stock_count')
+        .update({
+          category_id: input.categoryId,
+          occurred_on: input.date,
+          value_at_cost: input.valueAtCost,
+        })
+        .eq('id', input.id)
+        .eq('source', 'standalone')
+      if (error) throw error
     },
     onSuccess: async () => {
       await invalidateLedger(qc)

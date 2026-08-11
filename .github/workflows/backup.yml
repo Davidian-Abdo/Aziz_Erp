@@ -1,0 +1,85 @@
+# Weekly encrypted backup of aziz-prod into the private backup repository
+# (plan §4 Phase 7, §7 item 4).
+#
+# Required GitHub secrets:
+#   PROD_DB_URL          aziz-prod connection string — SEE THE WARNING BELOW
+#   BACKUP_PASSPHRASE    the symmetric passphrase. Losing it loses every backup;
+#                        it must live in the owner's password manager as well,
+#                        never only here.
+#   BACKUP_DEPLOY_KEY    private half of an SSH deploy key with WRITE access to
+#                        github.com/Davidian-Abdo/Aziz_Erp_Backup
+#
+# ⚠ PROD_DB_URL MUST BE THE POOLER CONNECTION STRING, NOT THE DIRECT ONE.
+# Supabase's direct database host (db.<ref>.supabase.co) resolves to IPv6 only —
+# `scripts/db.sh` already carries that scar, which is why its remote mode runs on
+# the host network. GitHub's hosted runners have no IPv6 route, so the direct
+# host fails with a connection timeout that reads exactly like a wrong password
+# and will be debugged as one. Copy the **Session pooler** string from the
+# Supabase dashboard (Project Settings → Database → Connection string), which is
+# IPv4 and speaks the full protocol pg_dump needs. The transaction pooler on
+# port 6543 does NOT work for pg_dump.
+name: Backup
+
+on:
+  schedule:
+    - cron: '0 3 * * 0' # 03:00 UTC every Sunday
+  workflow_dispatch:
+
+# One backup at a time. Two overlapping runs would race on the same branch of
+# the backup repository and one would be rejected on push — losing that week.
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dump and encrypt
+        run: bash scripts/backup.sh
+        env:
+          SUPABASE_DB_URL: ${{ secrets.PROD_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_OUT_DIR: ${{ runner.temp }}/backups
+
+      # Proves the file that is about to be committed can be opened again with
+      # the passphrase this workflow holds. A backup encrypted under a passphrase
+      # nobody has is indistinguishable from a good one until the day it matters,
+      # and it is the same class of failure as a dump that was never restored.
+      - name: Prove it decrypts
+        run: |
+          set -euo pipefail
+          f=$(ls "${{ runner.temp }}"/backups/*.sql.gpg)
+          gpg --batch --quiet --decrypt --passphrase-fd 3 "$f" 3<<<"$BACKUP_PASSPHRASE" \
+            | head -c 2000 | grep -q "PostgreSQL database dump" \
+            || { echo "decrypted output is not a pg_dump"; exit 1; }
+          echo "decrypts cleanly: $(basename "$f")"
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+
+      - name: Publish to the private backup repository
+        env:
+          DEPLOY_KEY: ${{ secrets.BACKUP_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+          git clone --depth 1 git@github.com:Davidian-Abdo/Aziz_Erp_Backup.git repo
+          mkdir -p repo/dumps
+          cp "${{ runner.temp }}"/backups/*.sql.gpg repo/dumps/
+
+          # Keep the twelve most recent in the working tree. Older ones stay in
+          # git history — this bounds what a clone checks out, not what exists.
+          ls -1 repo/dumps/*.sql.gpg | sort | head -n -12 | xargs -r git -C repo rm -q --
+
+          cd repo
+          git config user.name "aziz-erp-backup"
+          git config user.email "backup@users.noreply.github.com"
+          git add dumps
+          git commit -m "backup $(date -u +%Y-%m-%dT%H:%MZ)" || { echo "nothing changed"; exit 0; }
+          git push

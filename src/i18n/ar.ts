@@ -65,6 +65,12 @@ export const ar = {
       back: 'رجوع',
       cancel: 'إلغاء',
       delete: 'حذف',
+      edit: 'تعديل',
+      saveChanges: 'حفظ التعديلات',
+      // Shown while a record is loaded into the form. Without it the screen is
+      // indistinguishable from a fresh entry that happens to be prefilled, and
+      // the owner saves what they believe is a new record.
+      editing: 'أنت تعدّل سجلًا موجودًا.',
       noteOptional: 'ملاحظة (اختياري)',
       unknownAmount: 'مبلغ غير محدد',
     },

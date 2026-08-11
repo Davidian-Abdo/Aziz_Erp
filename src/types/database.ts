@@ -436,6 +436,17 @@ export type Database = {
         Args: { p_as_of: string; p_category: string; p_value: number }
         Returns: Json
       }
+      edit_purchase: {
+        Args: {
+          p_amount: number
+          p_category: string
+          p_date: string
+          p_id: string
+          p_note?: string
+          p_prior_stock: number
+        }
+        Returns: Json
+      }
       expected_on_hand: {
         Args: { p_as_of: string; p_category: string }
         Returns: number

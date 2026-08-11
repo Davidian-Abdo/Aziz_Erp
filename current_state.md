@@ -25,6 +25,7 @@ measurement** (`docs/domain-spec.md` §7.2).
 | `docs/architecture-spec.md` | Technical design. Amended 2026-08-02 |
 | `docs/v1.0_impl_plan.md` | The build plan. **Normative where it contradicts the specs** |
 | `docs/plan_review.md` | Review of the plan, 2026-08-02, with 8 findings |
+| `docs/restore-runbook.md` | How to restore the books from a backup. Written 2026-08-11 |
 | `Hmdnah_Prompt.md` | Session opening prompt for **Hmdnah**, on the Hetzner dev box |
 | `Amer_Prompt.md` | Session opening prompt for **Amer**, on the owner's Windows PC |
 
@@ -95,6 +96,20 @@ schema intact — a teardown, not a deletion. Port 5434 is free.
 **From Phase 3 on, the authority is the Supabase dev project, not this box** — a
 documented deviation from `cross_projects_policy.md` §7, because the Supabase
 project's extension set and role model are what production actually runs.
+
+**⚠ The pgTAP suite only runs green against a database that has not yet traded**
+(found 2026-08-11, Entry 17). Every fixture builds its own ledger and asserts
+**absolute** figures — `020_rls.sql` wants to read exactly 1 count and a report
+of exactly 10.00 — and nine of the fourteen files begin with `delete from
+article_category`, which the `purchase` foreign key refuses once purchases
+exist. So any pre-existing trading data makes the suite red over arithmetic that
+is perfectly correct. It passed against aziz-dev in Entry 4 because that project
+was empty. **Once the shop enters a single purchase, `SUPABASE_DB_URL=…
+./scripts/db.sh test` will report failures against a project that is entirely
+healthy.** Nothing is destroyed when that happens — every fixture wraps itself
+in `begin … rollback` — but a suite that goes red for a reason unrelated to
+correctness is a suite people stop reading. Run it against the local container
+or a restored copy (`scripts/restore-rehearse.sh`), not against a live shop.
 
 Toolchain: Node 20.20.2 / npm 10.8.2 (present on the box), Supabase CLI 2.111.0
 installed user-local at `~/bin/supabase` (no sudo, same pattern as `gh`).
@@ -1475,3 +1490,245 @@ VITE_SUPABASE_ANON_KEY for aziz-dev) to start the dev server and walk them.
 `npm run verify` green (124/124). No new commit — this entry is appended to the
 same working tree; Hmdnah will commit it as part of their entry or leave it for
 Amer to commit after the visual pass.
+
+### Entry 17 — 2026-08-11 — Hmdnah, dev box — Phase 7 backup closed; Phase 9 (editing) built; a one-sided guard found
+
+**Three things shipped: the encrypted backup with a rehearsed restore, editing
+for every record type, and a defect in the purchase/count guard that predates
+both.** `npm run verify` green — **135 tests across 16 files** (was 124/16).
+`npm run build` clean. pgTAP **296 assertions across 14 files** (was 275/13),
+green from a clean `npm run db:reset` — and green again against a database that
+was dumped, encrypted, decrypted and restored.
+
+**First, the pull. `node_modules` on this box predated Phase 7** — `npm install`
+was needed before `tsc` would resolve `vite-plugin-pwa`. Worth knowing for the
+next session that opens this box after Amer has shipped a phase: a green
+`verify` on one machine says nothing about the other until the lockfile is
+installed.
+
+**Migration 0013 (Arabic) is verified but still NOT applied to aziz-dev.** The
+owner chose the SQL-editor route over handing this box the database password, so
+the apply is theirs. It replays clean from empty here and the local database now
+carries all 24 Arabic names, the Arabic descriptions and `locale = 'ar-MA'`.
+Two things the next session should not have to rediscover: the migration is
+**idempotent** — every `UPDATE` is keyed on the French name, so a second run
+changes nothing — and pasting it leaves Supabase's own migration ledger unaware,
+which the owner was given a one-line `insert into
+supabase_migrations.schema_migrations` to fix.
+
+**⚠ Public signup is STILL enabled on aziz-dev** (`disable_signup: false`,
+re-checked over the network today — the endpoint needs no credentials). This is
+the **sixth consecutive entry** carrying it. plan §2.5 requires two independent
+defences and only the allowlist is in place.
+
+---
+
+#### 1. Phase 7 — the encrypted backup, and a restore that actually happened
+
+The owner supplied the private repository (`Aziz_Erp_Backup`), which was the
+last thing blocking it.
+
+| File | What it is |
+|---|---|
+| `scripts/backup.sh` | `pg_dump` of the `public` schema → AES256 via gpg. Local or remote |
+| `scripts/restore-rehearse.sh` | Builds a database, backs it up, restores it, and **proves the restored copy** |
+| `.github/workflows/backup.yml` | Weekly cron, decrypt-check, publish to the private repo over an SSH deploy key |
+| `docs/restore-runbook.md` | The human procedure, written to be followed on the worst day |
+
+**The rehearsal is the deliverable, not the script.** Plan §4 calls a rehearsed
+restore *"the only thing that proves a backup exists"*, so
+`restore-rehearse.sh` is self-contained: it builds its own source database from
+the migrations plus the **normative worked example of domain-spec §10**, backs
+*that* up through the real `backup.sh`, restores it into a scratch database, and
+then asserts four separate things. It never touches the working database.
+
+It ends `RESTORE REHEARSAL PASSED` today, having checked:
+
+1. **Row counts identical across all 12 tables.** Catches a truncated dump —
+   which encrypts, commits and pushes exactly as cleanly as a good one.
+2. **`report_period` byte-identical, and the §10 gate holding on the restored
+   copy: 5,625.00 / 6,750.00 / 1,125.00 / 100%.** The figure the whole plan is
+   sequenced around, recomputed by a database that did not exist a minute
+   earlier. This is the check that proves the *views and functions* came back,
+   not merely the rows.
+3. **`anon` holds EXECUTE on 0 functions; RLS on all 12 tables.** The one that
+   cannot be done by eye: a restore that dropped the revoke sweep produces a
+   database that looks perfect and is open to anyone on the internet.
+4. **The full pgTAP suite — 296 assertions — against the restored copy.**
+
+**Four judgement calls worth knowing.**
+
+- **The `auth` schema is deliberately not in the dump.** It is platform-managed
+  and does not restore across projects; `app_user` has no foreign key to
+  `auth.users` (checked, not assumed), so the public schema is self-contained.
+  ⚠ **The cost is exact and it is R2's failure mode again**: a restored
+  `app_user.user_id` points at a user that exists only in the old project, so
+  the owner logs in and every screen is empty. `docs/restore-runbook.md` makes
+  re-pointing the allowlist a numbered step with a warning, rather than a thing
+  to remember.
+- **`backup.sh` refuses to write a file under 4 kB.** A gpg file of a failed
+  dump is still a valid gpg file. Without a floor, an empty dump encrypts,
+  commits, and is discovered worthless on the day it is needed.
+- **The workflow decrypts what it just encrypted before publishing it.** A
+  backup encrypted under a passphrase nobody holds is indistinguishable from a
+  good one until it matters — the same class of failure as a dump never
+  restored, one level down.
+- **⚠ `PROD_DB_URL` must be the SESSION POOLER string, not the direct host.**
+  Supabase's `db.<ref>.supabase.co` is IPv6-only — `scripts/db.sh` already
+  carries that scar — and GitHub's runners have no IPv6 route. The direct host
+  fails with a connection timeout that reads exactly like a wrong password and
+  will be debugged as one. Written into the workflow header where it will be
+  read.
+
+**Still owed by the owner before the workflow can run:** `BACKUP_PASSPHRASE` (a
+GitHub secret **and** an entry in their password manager — a passphrase held
+only in GitHub is lost with the GitHub account) and `BACKUP_DEPLOY_KEY`, the
+private half of an SSH deploy key with write access to `Aziz_Erp_Backup`.
+
+---
+
+#### 2. ⚠ THE FINDING: the purchase/count coherence guard was one-sided
+
+**Reachable over the API since Phase 1, with no edit screen needed.**
+
+`0004_guards.sql` protects a purchase and its embedded count with a trigger on
+**`purchase`**, fired by changes to `prior_count_id`, `category_id` or
+`occurred_on`. Nothing guarded the other side — and `authenticated` holds UPDATE
+on `stock_count` (`0006_security.sql`). Measured on the local database before
+anything was changed:
+
+```sql
+update stock_count set occurred_on = '2026-01-02' where id = <embedded>;
+-- UPDATE 1.  purchase 2026-01-10, count 2026-01-02, coherent = f
+```
+
+`v_stock_event` reads the **category from the count** and the **ordering anchor
+from the purchase**. Once they disagree, the delivery is ordered against one date
+and valued against another, and every figure that comes out still looks
+plausible. 0004's own comment names this exact state: *"the timeline silently
+corrupted rather than failing loudly — the worst kind of bug in this system."*
+
+**Fixed in `0014` by a DEFERRED constraint trigger on `stock_count`.** Deferred
+is load-bearing, not stylistic: `edit_purchase` has to move both rows, and
+whichever it writes first leaves the pair transiently disagreeing. A check that
+runs at COMMIT permits any transaction ending coherent and rejects any that does
+not — including a lone PostgREST update, which commits by itself. Proved in
+`095_edit_rpcs.sql`, both directions: the offending UPDATE fails, a standalone
+count still moves freely, and the embedded count's *value* is still editable.
+
+**A second-order lesson from writing that test.** `set constraints all
+immediate` applies to the **rest of the transaction**, not to the statement
+beside it — so the fixture's own Part A silently put every later
+`edit_purchase` call into immediate mode and broke its legitimate two-step move.
+That was a fixture artefact, but it showed the RPC depended on ambient
+transaction state it never set, so `edit_purchase` now asserts the mode itself.
+**Building the feature is what found the defect; testing the fix is what found
+the fragility in the fix.**
+
+---
+
+#### 3. Phase 9 — editing every record type (domain-spec §8.5)
+
+Decided by the owner this session. §8.5 has always said records are editable;
+Phase 4 shipped deletion only and flagged the gap.
+
+| Where | How |
+|---|---|
+| Charges, losses, standalone counts | Ordinary PostgREST `UPDATE`. One row, no cross-row invariant, and the audit trigger of `0005` already writes before/after — which is what §8.5 actually asks for |
+| Purchases | `edit_purchase` (`0014`), SECURITY DEFINER, mirroring `record_purchase` |
+| UI | **The entry form is the edit form** on all four screens — prefilled, with a *"Vous modifiez un enregistrement existant"* banner and a Cancel |
+
+**Why purchases need an RPC when the other three do not.** An edit can move a
+purchase across the §3.2A boundary in **either direction**, which an insert
+never has to face: pulled behind the category's last count it must give up its
+embedded count; pushed forward it must acquire one. Both rows must also move
+together. Proved in both directions in pgTAP.
+
+**No `request_id` on any edit path, deliberately.** Idempotency exists to stop a
+retried INSERT posting money twice; an edit sets fields to given values and
+converges on replay. Asserted in the component test, which also asserts
+`record_purchase` was not called at all — a duplicated purchase inflates
+outflow, which this model reports as **profit**.
+
+**Reusing the entry form rather than building four dialogs** is the judgement
+call with the most consequence. The forms already parse amounts, refuse future
+dates, run the plausibility gate and carry the §3.2A wording. A second
+implementation would drift, and *the copy that drifted would be the one used to
+fix mistakes*.
+
+**⚠ A second bug, found by building the client half.** The purchase form decides
+which §3.2A branch to show by comparing the date against the category's last
+count — which, when editing, is very often **the purchase's own embedded
+count**, the one about to move with it. Left in, the form concludes "backdated",
+shows the "no count will be recorded" notice, saves a null prior stock, and
+`edit_purchase` rejects it with *"a count is required"* over a purchase the user
+never mis-entered. `useLatestCount` now takes an `excludeCountId`, matching what
+the SQL already does. **Revert-verified**: removing the exclusion turns the test
+red and prints the missing id.
+
+**An embedded count offers no edit button on the counts screen**, matching the
+existing delete restriction. A row that offers an action which can only fail is
+worse than a row that offers none — and the database now refuses it regardless.
+
+---
+
+**Verified, and on what.**
+
+- **`npm run verify`** — lint, format, `tsc -b`, **135 Vitest tests, green**.
+  11 new: 3 charges, 2 losses, 2 counts, 4 purchases.
+- **`npm run db:test`** — **296 pgTAP assertions across 14 files, green**, from
+  a clean `db:reset` on the local container, migrations `0001`–`0014` replayed
+  from genuinely empty.
+- **`./scripts/restore-rehearse.sh`** — passed end to end, including the full
+  suite against the restored copy.
+- **`npm run build`** — clean. The 500 kB chunk warning is pre-existing from
+  Phase 5.
+- **aziz-dev was reached** only to read `/auth/v1/settings` (no credentials
+  needed). **No write, no migration, no pgTAP run against it** — this box holds
+  neither the database password nor a login, by the owner's choice.
+
+**Not verified.**
+
+- **No browser has rendered the edit affordances.** Four screens gained a
+  *"Modifier"* control on every recent row and a two-button footer; on a
+  phone-width screen that row now carries an amount and two text buttons, and
+  **nothing has looked at it**. This is Amer's, and it is the newest untested
+  layout in the app.
+- **The Playwright suite has not been run** against the edit paths — no browser
+  on this box. The specs do not cover editing yet; they should.
+- **The backup workflow has never run in CI.** The mechanism is proven locally,
+  end to end, but the pooler connection string, the deploy key and the
+  passphrase are all owner-side and untested.
+- **Migration 0013 and 0014 are not on aziz-dev.** 0014 is new this session and
+  needs applying the same way as 0013.
+
+**Owner action items, in order.**
+
+1. **Apply `0013_arabic_categories.sql` then `0014_edit_rpcs.sql`** to aziz-dev
+   via the SQL editor, in that order, plus the two `schema_migrations` rows.
+2. **Disable public signup on aziz-dev.** Sixth entry.
+3. **Add `BACKUP_PASSPHRASE` and `BACKUP_DEPLOY_KEY`**, then run the Backup
+   workflow once by hand and confirm a file lands in `Aziz_Erp_Backup/dumps/`.
+4. The Phase 7 items of Entry 13 (aziz-prod, Cloudflare, the deploy secrets) are
+   unchanged and still outstanding.
+
+**Next for Amer:** the visual pass. It is now **two** things rather than one —
+the Arabic/RTL walk of every authenticated screen at 375 px that Entry 15 and 16
+already owed, and the new edit controls, which have never been seen at all.
+
+**Box:** `aziz_erp_pg` created on :5434 and **removed again** at the end of the
+session; the named volume `aziz_erp_pg_data` is kept and port 5434 is free. The
+two scratch databases the rehearsal creates (`aziz_backup_src`,
+`aziz_restore_test`) are dropped by the script on exit. `npm install` added the
+Phase 7 dependencies to this box's `node_modules` (0 vulnerabilities). ⚠ **It
+also touched `package-lock.json`** — no dependency version moved and
+`package.json` is untouched, but npm dropped a number of `"peer": true` markers
+and added the Linux-only optional binaries this box resolves (`@emnapi/runtime`
+and friends). Committed rather than reverted, because a lockfile that does not
+describe what was actually installed is worse than a noisy diff. If Amer's npm
+flips those markers back on the next install, that is normalisation between npm
+versions and not a dependency change — check `package.json` before believing
+otherwise. No other project touched; `portfolio-caddy-1` and
+`beamstack-contact` untouched (§6a hard limit), as were `planitor-pg`,
+`chantier_test_pg`, `chantier_test_redis`, `mdo-dev-postgres-1`. §6 pause ladder
+never invoked — ~1.4–2.0 GiB available throughout.

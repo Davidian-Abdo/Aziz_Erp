@@ -37,6 +37,15 @@ type StockQuestionProps = {
   categoryDescription: string
   date: string
   busy: boolean
+  /*
+   * The answer already recorded, when an existing purchase is being corrected
+   * (domain-spec §8.5). Prefilled so that fixing a mistyped amount does not
+   * force the owner to re-answer a question about a shelf they can no longer
+   * see — the original answer was given at the delivery and is the better one.
+   * Null for a new purchase, and 0 is a real answer (the shelf was empty), not
+   * an absent one.
+   */
+  initialValue?: number | null
   onBack: () => void
   onAnswer: (priorStock: number) => void
 }
@@ -49,6 +58,7 @@ export function StockQuestion({
   categoryDescription,
   date,
   busy,
+  initialValue = null,
   onBack,
   onAnswer,
 }: StockQuestionProps) {
@@ -56,8 +66,12 @@ export function StockQuestion({
   const expected = useExpectedOnHand(categoryId, date)
   const gate = usePlausibilityGate()
 
-  const [mode, setMode] = useState<Mode>('unanswered')
-  const [text, setText] = useState('')
+  const [mode, setMode] = useState<Mode>(
+    initialValue === null ? 'unanswered' : initialValue === 0 ? 'empty' : 'value',
+  )
+  const [text, setText] = useState(
+    initialValue === null || initialValue === 0 ? '' : String(initialValue).replace('.', ','),
+  )
   const [error, setError] = useState<AmountError | null>(null)
 
   async function submit() {

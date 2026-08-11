@@ -2,8 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { invalidateLedger, purchasesQueryKey } from './ledger'
 import {
+  editPurchaseResultSchema,
   plausibilitySchema,
   recordPurchaseResultSchema,
+  type EditPurchaseResult,
   type Plausibility,
   type RecordPurchaseResult,
 } from '@/types/writes'
@@ -28,6 +30,12 @@ export type PurchaseRow = {
   amountAtCost: number
   /** Null on a backdated purchase — no count was attached (domain-spec §3.2). */
   priorCountId: string | null
+  /**
+   * The embedded count's value, so an edit can prefill the §3.2A shelf question
+   * instead of making the owner re-answer it to correct an amount. Null exactly
+   * when `priorCountId` is.
+   */
+  priorStockValue: number | null
   note: string | null
 }
 
@@ -38,7 +46,7 @@ export function useRecentPurchases(limit = 10) {
       const { data, error } = await supabase
         .from('purchase')
         .select(
-          'id, category_id, occurred_on, amount_at_cost, prior_count_id, note, article_category(name)',
+          'id, category_id, occurred_on, amount_at_cost, prior_count_id, note, article_category(name), stock_count(value_at_cost)',
         )
         .order('occurred_on', { ascending: false })
         .order('created_at', { ascending: false })
@@ -51,6 +59,7 @@ export function useRecentPurchases(limit = 10) {
         occurredOn: row.occurred_on,
         amountAtCost: Number(row.amount_at_cost),
         priorCountId: row.prior_count_id,
+        priorStockValue: row.stock_count === null ? null : Number(row.stock_count.value_at_cost),
         note: row.note,
       }))
     },
@@ -118,6 +127,53 @@ export function useRecordPurchase() {
       })
       if (error) throw error
       return recordPurchaseResultSchema.parse(data)
+    },
+    onSuccess: async () => {
+      await invalidateLedger(qc)
+    },
+  })
+}
+
+export type EditPurchaseInput = {
+  id: string
+  categoryId: string
+  date: string
+  /** The whole shelf before the delivery, or null when backdated. */
+  priorStock: number | null
+  amount: number
+  note: string | null
+}
+
+/**
+ * Correcting an existing purchase (domain-spec §8.5).
+ *
+ * Through `edit_purchase` rather than a direct UPDATE, for a reason an insert
+ * never has to face: an edit can move a purchase ACROSS the §3.2A boundary in
+ * either direction. Drag it behind the category's last count and the embedded
+ * count must be deleted; drag it forward again and one must be created. Both
+ * rows also have to move together or the timeline is silently corrupted — see
+ * the defect note at the top of 0014_edit_rpcs.sql.
+ *
+ * No `requestId`. An edit is idempotent by construction.
+ */
+export function useEditPurchase() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: EditPurchaseInput): Promise<EditPurchaseResult> => {
+      const { data, error } = await supabase.rpc('edit_purchase', {
+        p_id: input.id,
+        p_category: input.categoryId,
+        p_date: input.date,
+        p_amount: input.amount,
+        // As in useRecordPurchase: the generated type says `number` because the
+        // SQL parameter has no default, and null is what the backdated branch
+        // requires.
+        p_prior_stock: input.priorStock as number,
+        p_note: input.note ?? undefined,
+      })
+      if (error) throw error
+      return editPurchaseResultSchema.parse(data)
     },
     onSuccess: async () => {
       await invalidateLedger(qc)

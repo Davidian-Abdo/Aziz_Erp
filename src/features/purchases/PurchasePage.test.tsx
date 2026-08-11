@@ -31,6 +31,10 @@ const state = vi.hoisted(() => ({
   lastCountOn: null as string | null,
   verdict: 'ok' as Plausibility['verdict'],
   calls: [] as RecordPurchaseInput[],
+  edits: [] as unknown[],
+  recent: [] as unknown[],
+  /* Which count id the form asked to be EXCLUDED from the latest-count lookup. */
+  excluded: [] as (string | null)[],
   /** Set to make `mutate` succeed; while false every attempt "fails". */
   succeeds: true,
 }))
@@ -45,10 +49,13 @@ vi.mock('@/api/settings', () => ({
 }))
 
 vi.mock('@/api/counts', () => ({
-  useLatestCount: () => ({
-    isPending: false,
-    data: state.lastCountOn ? { occurredOn: state.lastCountOn, valueAtCost: 1000 } : null,
-  }),
+  useLatestCount: (_categoryId: string | null, excludeCountId?: string | null) => {
+    state.excluded.push(excludeCountId ?? null)
+    return {
+      isPending: false,
+      data: state.lastCountOn ? { occurredOn: state.lastCountOn, valueAtCost: 1000 } : null,
+    }
+  },
   useExpectedOnHand: () => ({ isPending: false, data: 1000 }),
 }))
 
@@ -77,8 +84,17 @@ vi.mock('@/api/purchases', async (importOriginal) => {
           opts?.onSuccess?.({ purchase_id: 'p1', count_id: null, replayed: false })
       },
     }),
-    useRecentPurchases: () => ({ isPending: false, data: [] }),
+    useRecentPurchases: () => ({ isPending: false, data: state.recent }),
     useDeletePurchase: () => ({ isPending: false, mutate: vi.fn() }),
+    useEditPurchase: () => ({
+      isPending: false,
+      isError: false,
+      error: null,
+      mutate: (input: unknown, opts?: { onSuccess?: (r: unknown) => void }) => {
+        state.edits.push(input)
+        opts?.onSuccess?.({ purchase_id: 'p1', count_id: null })
+      },
+    }),
   }
 })
 
@@ -261,5 +277,110 @@ describe('idempotency (domain-spec §8.1, plan §2.12)', () => {
     // entry and silently never recorded.
     expect(state.calls[1]?.requestId).not.toBe(state.calls[0]?.requestId)
     expect(state.calls[1]?.amount).toBe(450)
+  })
+})
+
+/*
+ * Editing a purchase (domain-spec §8.5) — the hardest of the four records to
+ * correct, and the reason `edit_purchase` is an RPC rather than an UPDATE.
+ */
+describe('editing a purchase (domain-spec §8.5)', () => {
+  const ROW = {
+    id: 'ffffffff-9999-9999-9999-999999999999',
+    categoryId: DAIRY.id,
+    categoryName: DAIRY.name,
+    occurredOn: '2026-08-01',
+    amountAtCost: 300,
+    priorCountId: 'cccccccc-9999-9999-9999-999999999999',
+    priorStockValue: 800,
+    note: 'livraison',
+  }
+
+  beforeEach(() => {
+    state.recent = [ROW]
+    state.edits = []
+    state.calls = []
+    state.excluded = []
+  })
+
+  afterEach(() => {
+    state.recent = []
+  })
+
+  it('loads the purchase into the first screen', async () => {
+    const user = userEvent.setup({ delay: null })
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: `Modifier — ${DAIRY.name}` }))
+
+    expect(screen.getByLabelText<HTMLInputElement>('Montant payé').value).toBe('300')
+    expect(screen.getByLabelText<HTMLInputElement>('Date de l’achat').value).toBe('2026-08-01')
+    expect(screen.getByText('Vous modifiez un enregistrement existant.')).toBeInTheDocument()
+  })
+
+  it('EXCLUDES the purchase’s own embedded count from the latest-count lookup', async () => {
+    // ⚠ This is a correctness assertion, not a plumbing one.
+    //
+    // The form decides which §3.2A branch to show by comparing the date against
+    // the category's last count. When editing, that last count is very often the
+    // purchase's OWN embedded count — which is about to move with it. Left in,
+    // the client concludes "backdated", shows the "no count will be recorded"
+    // notice, saves a null prior stock, and edit_purchase rejects it with "a
+    // count is required" over a purchase the user never mis-entered.
+    //
+    // edit_purchase excludes it server-side (0014_edit_rpcs.sql); this is the
+    // client half of the same rule.
+    state.lastCountOn = '2026-08-01'
+    const user = userEvent.setup({ delay: null })
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: `Modifier — ${DAIRY.name}` }))
+    state.excluded = []
+    await user.click(screen.getByRole('button', { name: 'Suivant' }))
+
+    expect(state.excluded).toContain(ROW.priorCountId)
+  })
+
+  it('prefills the shelf answer instead of asking for it again', async () => {
+    state.lastCountOn = null
+    const user = userEvent.setup({ delay: null })
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: `Modifier — ${DAIRY.name}` }))
+    await user.click(screen.getByRole('button', { name: 'Suivant' }))
+
+    // The original answer was given standing at the delivery. Making the owner
+    // re-answer it to fix a mistyped amount is asking them to invent a figure.
+    expect(screen.getByLabelText<HTMLInputElement>('Valeur restante, au prix d’achat').value).toBe(
+      '800',
+    )
+  })
+
+  it('UPDATES the purchase, with no request_id and no second row', async () => {
+    state.lastCountOn = null
+    const user = userEvent.setup({ delay: null })
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: `Modifier — ${DAIRY.name}` }))
+    await user.clear(screen.getByLabelText('Montant payé'))
+    await user.type(screen.getByLabelText('Montant payé'), '450')
+    await user.click(screen.getByRole('button', { name: 'Suivant' }))
+    await user.click(screen.getByRole('button', { name: 'Enregistrer l’achat' }))
+
+    await waitFor(() => expect(state.edits).toHaveLength(1))
+    expect(state.edits[0]).toEqual({
+      id: ROW.id,
+      categoryId: DAIRY.id,
+      date: '2026-08-01',
+      amount: 450,
+      priorStock: 800,
+      note: 'livraison',
+    })
+    // An edit carries no request_id: it converges on replay, where an insert
+    // would post the money twice. And record_purchase must not have been called
+    // at all — a duplicated purchase inflates outflow, which this model reports
+    // as PROFIT.
+    expect(state.edits[0]).not.toHaveProperty('requestId')
+    expect(state.calls).toHaveLength(0)
   })
 })

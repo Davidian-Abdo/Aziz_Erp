@@ -4,17 +4,19 @@ import { useCategories } from '@/api/categories'
 import {
   LOSS_REASONS,
   useDeleteLoss,
+  useEditLoss,
   useRecentLosses,
   useRecordLoss,
   type LossNature,
   type LossReason,
+  type LossRow,
 } from '@/api/losses'
 import { useStoreToday } from '@/api/settings'
 import { AmountField } from '@/components/AmountField'
 import { CategorySelect } from '@/components/CategorySelect'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { DateField } from '@/components/DateField'
-import { Field, inputClass, primaryButtonClass } from '@/components/Field'
+import { Field, inputClass, primaryButtonClass, secondaryButtonClass } from '@/components/Field'
 import { Money } from '@/components/Money'
 import { RecentPanel, RecentRow } from '@/components/RecentPanel'
 import { parseAmount, type AmountError } from '@/lib/amount'
@@ -39,6 +41,7 @@ export function LossesPage() {
   const today = useStoreToday()
   const categories = useCategories()
   const record = useRecordLoss()
+  const edit = useEditLoss()
 
   const [categoryId, setCategoryId] = useState('')
   const [date, setDate] = useState(today)
@@ -49,6 +52,39 @@ export function LossesPage() {
   const [categoryError, setCategoryError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  /*
+   * Correcting a loss reuses this form (domain-spec §8.5). The reason picker is
+   * the point: it decides whether the amount is the store's shrinkage or the
+   * owner taking goods home, and choosing the wrong radio is the most likely
+   * mistake on this screen. Re-entering the record to fix it would mean the
+   * owner deleting a real loss, which is a worse operation than editing one.
+   */
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const active = editingId ? edit : record
+
+  function reset() {
+    setEditingId(null)
+    setText('')
+    setNote('')
+    setDate(today)
+    setCategoryId('')
+    setReason('spoiled')
+    setAmountError(null)
+    setCategoryError(null)
+  }
+
+  function startEdit(row: LossRow) {
+    setEditingId(row.id)
+    setCategoryId(row.categoryId)
+    setDate(row.occurredOn)
+    setText(String(row.amountAtCost).replace('.', ','))
+    setReason(row.reason)
+    setNote(row.note ?? '')
+    setSaved(false)
+    setAmountError(null)
+    setCategoryError(null)
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     const parsed = parseAmount(text)
@@ -56,6 +92,27 @@ export function LossesPage() {
     setCategoryError(categoryId ? null : t('losses.categoryRequired'))
     if (!parsed.ok || !categoryId) return
     setSaved(false)
+
+    if (editingId) {
+      edit.mutate(
+        {
+          id: editingId,
+          categoryId,
+          date,
+          amount: parsed.value,
+          reason,
+          note: note.trim() || null,
+        },
+        {
+          onSuccess: () => {
+            setSaved(true)
+            reset()
+          },
+        },
+      )
+      return
+    }
+
     record.mutate(
       { categoryId, date, amount: parsed.value, reason, note: note.trim() || null },
       {
@@ -76,6 +133,12 @@ export function LossesPage() {
       {saved && (
         <p role="status" className="rounded-lg bg-black/5 p-3 text-sm dark:bg-white/10">
           {t('losses.saved')}
+        </p>
+      )}
+
+      {editingId && (
+        <p role="status" className="rounded-lg bg-black/5 p-3 text-sm dark:bg-white/10">
+          {t('common.editing')}
         </p>
       )}
 
@@ -119,18 +182,29 @@ export function LossesPage() {
           )}
         </Field>
 
-        {record.isError && (
+        {active.isError && (
           <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-            {t(`write.error.${writeErrorKey(record.error)}`)}
+            {t(`write.error.${writeErrorKey(active.error)}`)}
           </p>
         )}
 
-        <button type="submit" disabled={record.isPending} className={primaryButtonClass}>
-          {record.isPending ? t('losses.saving') : t('losses.save')}
-        </button>
+        <div className="flex gap-2">
+          <button type="submit" disabled={active.isPending} className={primaryButtonClass}>
+            {active.isPending
+              ? t('losses.saving')
+              : editingId
+                ? t('common.saveChanges')
+                : t('losses.save')}
+          </button>
+          {editingId && (
+            <button type="button" onClick={reset} className={secondaryButtonClass}>
+              {t('common.cancel')}
+            </button>
+          )}
+        </div>
       </form>
 
-      <RecentLosses />
+      <RecentLosses onEdit={startEdit} />
     </main>
   )
 }
@@ -170,7 +244,7 @@ function ReasonPicker({
   )
 }
 
-function RecentLosses() {
+function RecentLosses({ onEdit }: { onEdit: (row: LossRow) => void }) {
   const { t } = useTranslation()
   const recent = useRecentLosses()
   const remove = useDeleteLoss()
@@ -191,6 +265,8 @@ function RecentLosses() {
             primary={row.categoryName}
             secondary={`${formatDateShort(row.occurredOn)} · ${t(`losses.reason_.${row.reason}`)}`}
             amount={<Money value={row.amountAtCost} kind="measured" />}
+            onEdit={() => onEdit(row)}
+            editLabel={t('common.edit')}
             onDelete={() => setPendingDelete(row.id)}
             deleteLabel={t('common.delete')}
           />

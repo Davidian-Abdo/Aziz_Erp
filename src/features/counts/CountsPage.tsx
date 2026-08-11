@@ -1,20 +1,22 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useCategories } from '@/api/categories'
 import {
   useDeleteCount,
+  useEditCount,
   useLatestCount,
   useLatestCounts,
   useRecentCounts,
   useRecordSweep,
+  type CountRow,
 } from '@/api/counts'
 import { useStoreToday } from '@/api/settings'
 import { AmountField } from '@/components/AmountField'
 import { CategorySelect } from '@/components/CategorySelect'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { DateField } from '@/components/DateField'
-import { primaryButtonClass } from '@/components/Field'
+import { primaryButtonClass, secondaryButtonClass } from '@/components/Field'
 import { Money } from '@/components/Money'
 import { RecentPanel, RecentRow } from '@/components/RecentPanel'
 import { PlausibilityDialog } from './PlausibilityDialog'
@@ -50,6 +52,19 @@ export function CountsPage() {
   const [mode, setMode] = useState<Mode>('single')
   const [prompt, setPrompt] = useState(false)
 
+  /*
+   * A count being corrected (domain-spec §8.5). It lives here rather than in
+   * SingleCountForm because the recent list is a sibling of the form, and
+   * because picking a row has to switch the screen back to single mode — the
+   * sweep enters twelve counts at once and cannot express "change this one".
+   */
+  const [editing, setEditing] = useState<CountRow | null>(null)
+
+  function startEdit(row: CountRow) {
+    setMode('single')
+    setEditing(row)
+  }
+
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 p-4 pb-24">
       <h1 className="text-2xl font-semibold">{t('nav.counts')}</h1>
@@ -60,14 +75,18 @@ export function CountsPage() {
       </div>
 
       {mode === 'single' ? (
-        <SingleCountForm onSaved={() => setPrompt(true)} />
+        <SingleCountForm
+          onSaved={() => setPrompt(true)}
+          editing={editing}
+          onDoneEditing={() => setEditing(null)}
+        />
       ) : (
         <SweepForm onSaved={() => setPrompt(true)} />
       )}
 
       {prompt && <LossPrompt onClose={() => setPrompt(false)} />}
 
-      <RecentCounts />
+      <RecentCounts onEdit={startEdit} />
     </main>
   )
 }
@@ -101,11 +120,20 @@ function ModeTab({
   )
 }
 
-function SingleCountForm({ onSaved }: { onSaved: () => void }) {
+function SingleCountForm({
+  onSaved,
+  editing = null,
+  onDoneEditing,
+}: {
+  onSaved: () => void
+  editing?: CountRow | null
+  onDoneEditing?: () => void
+}) {
   const { t } = useTranslation()
   const today = useStoreToday()
   const categories = useCategories()
   const record = useRecordSweep()
+  const edit = useEditCount()
   const gate = usePlausibilityGate()
 
   /*
@@ -130,7 +158,52 @@ function SingleCountForm({ onSaved }: { onSaved: () => void }) {
   const previous = useLatestCount(categoryId || null)
   const category = (categories.data ?? []).find((c) => c.id === categoryId)
 
+  /*
+   * The row being corrected is loaded into the form's own fields, so the
+   * plausibility gate, the previous-count reference and the whole-shelf wording
+   * all still apply. `editingId` tracks which row the fields came from; the
+   * effect below re-runs only when a DIFFERENT row is picked, so it prefills
+   * once and then leaves the fields to the user.
+   */
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const active = editingId ? edit : record
+
+  useEffect(() => {
+    if (!editing) return
+    setEditingId(editing.id)
+    setCategoryId(editing.categoryId)
+    setDate(editing.occurredOn)
+    setText(String(editing.valueAtCost).replace('.', ','))
+    setSaved(null)
+    setAmountError(null)
+    setCategoryError(null)
+  }, [editing])
+
+  function clearForm() {
+    setEditingId(null)
+    setText('')
+    setCategoryId('')
+    setDate(today)
+    setAmountError(null)
+    setCategoryError(null)
+    onDoneEditing?.()
+  }
+
   function write(value: number) {
+    if (editingId) {
+      edit.mutate(
+        { id: editingId, categoryId, date, valueAtCost: value },
+        {
+          onSuccess: () => {
+            setSaved({ replayed: false })
+            clearForm()
+            onSaved()
+          },
+        },
+      )
+      return
+    }
+
     record.mutate(
       { requestId, date, counts: [{ categoryId, valueAtCost: value }] },
       {
@@ -162,6 +235,12 @@ function SingleCountForm({ onSaved }: { onSaved: () => void }) {
       {saved && (
         <p role="status" className="rounded-lg bg-black/5 p-3 text-sm dark:bg-white/10">
           {saved.replayed ? t('counts.savedReplayed') : t('counts.saved')}
+        </p>
+      )}
+
+      {editingId && (
+        <p role="status" className="rounded-lg bg-black/5 p-3 text-sm dark:bg-white/10">
+          {t('common.editing')}
         </p>
       )}
 
@@ -205,19 +284,30 @@ function SingleCountForm({ onSaved }: { onSaved: () => void }) {
         error={amountError}
       />
 
-      {record.isError && (
+      {active.isError && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          {t(`write.error.${writeErrorKey(record.error)}`)}
+          {t(`write.error.${writeErrorKey(active.error)}`)}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={record.isPending || gate.checking}
-        className={primaryButtonClass}
-      >
-        {record.isPending ? t('counts.saving') : t('counts.save')}
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={active.isPending || gate.checking}
+          className={primaryButtonClass}
+        >
+          {active.isPending
+            ? t('counts.saving')
+            : editingId
+              ? t('common.saveChanges')
+              : t('counts.save')}
+        </button>
+        {editingId && (
+          <button type="button" onClick={clearForm} className={secondaryButtonClass}>
+            {t('common.cancel')}
+          </button>
+        )}
+      </div>
 
       {gate.verdict && (
         <PlausibilityDialog
@@ -342,7 +432,7 @@ function LossPrompt({ onClose }: { onClose: () => void }) {
   )
 }
 
-function RecentCounts() {
+function RecentCounts({ onEdit }: { onEdit: (row: CountRow) => void }) {
   const { t } = useTranslation()
   const recent = useRecentCounts()
   const remove = useDeleteCount()
@@ -363,9 +453,12 @@ function RecentCounts() {
             primary={row.categoryName}
             secondary={`${formatDateShort(row.occurredOn)} · ${t(`counts.source.${row.source}`)}`}
             amount={<Money value={row.valueAtCost} kind="measured" />}
-            // A count embedded in a purchase belongs to that purchase and is
-            // deleted with it; offering a delete here would only produce a
-            // foreign-key error the user cannot act on.
+            // A count embedded in a purchase belongs to that purchase and moves
+            // with it; offering either action here would produce an error the
+            // user cannot act on. Editing the purchase moves both rows
+            // (0014_edit_rpcs.sql).
+            onEdit={row.source === 'standalone' ? () => onEdit(row) : undefined}
+            editLabel={t('common.edit')}
             onDelete={row.source === 'standalone' ? () => setPendingDelete(row.id) : undefined}
             deleteLabel={t('common.delete')}
           />

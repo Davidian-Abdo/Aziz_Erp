@@ -30,7 +30,12 @@ CONTAINER=aziz_erp_pg
 IMAGE=supabase/postgres:17.6.1.158
 VOLUME=aziz_erp_pg_data
 PORT=5434
-DB=aziz
+# Overridable so the pgTAP suite can be pointed at a database other than the
+# working one — specifically the scratch database a restore rehearsal builds
+# (`scripts/restore-rehearse.sh`). A backup that has only ever been *taken* is
+# not a backup; running the whole suite against the restored copy is what turns
+# the dump into evidence.
+DB="${AZIZ_DB:-aziz}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # psql that fails loudly: any error aborts.

@@ -29,8 +29,30 @@ export const recordSweepResultSchema = z.object({
   replayed: z.boolean(),
 })
 
+/*
+ * `edit_purchase` (0014_edit_rpcs.sql).
+ *
+ * Deliberately NOT recordPurchaseResultSchema with `replayed` made optional.
+ * There is no `replayed` here because an edit needs no idempotency key: it sets
+ * fields to given values and converges on replay, where an insert would post the
+ * money twice.
+ *
+ * `count_id` is nullable and the null case is real rather than defensive — it is
+ * what an edit returns when it moves a purchase BEHIND the category's last count
+ * and the embedded count is therefore deleted. Both branches are captured from
+ * the database in `write-rpcs.captured.json`, because the last two times a
+ * nullable field here was assumed rather than measured (`z.uuid()` in Phase 3,
+ * the plausibility figures in Phase 4) the parse failed closed on data Postgres
+ * was perfectly happy with.
+ */
+export const editPurchaseResultSchema = z.object({
+  purchase_id: pgUuid,
+  count_id: pgUuid.nullable(),
+})
+
 export type RecordPurchaseResult = z.infer<typeof recordPurchaseResultSchema>
 export type RecordSweepResult = z.infer<typeof recordSweepResultSchema>
+export type EditPurchaseResult = z.infer<typeof editPurchaseResultSchema>
 
 /*
  * The plausibility verdict (domain-spec §3.2, plan §2.3c).

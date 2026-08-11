@@ -5,15 +5,17 @@ import { useLatestCount } from '@/api/counts'
 import {
   isBackdated,
   useDeletePurchase,
+  useEditPurchase,
   useRecentPurchases,
   useRecordPurchase,
+  type PurchaseRow,
 } from '@/api/purchases'
 import { useStoreToday } from '@/api/settings'
 import { AmountField } from '@/components/AmountField'
 import { CategorySelect } from '@/components/CategorySelect'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { DateField } from '@/components/DateField'
-import { Field, inputClass, primaryButtonClass } from '@/components/Field'
+import { Field, inputClass, primaryButtonClass, secondaryButtonClass } from '@/components/Field'
 import { Money } from '@/components/Money'
 import { RecentPanel, RecentRow } from '@/components/RecentPanel'
 import { StockQuestion } from './StockQuestion'
@@ -42,6 +44,7 @@ export function PurchasePage() {
   const today = useStoreToday()
   const categories = useCategories()
   const record = useRecordPurchase()
+  const edit = useEditPurchase()
 
   const [step, setStep] = useState<Step>('details')
   const [categoryId, setCategoryId] = useState('')
@@ -51,6 +54,21 @@ export function PurchasePage() {
   const [amountError, setAmountError] = useState<AmountError | null>(null)
   const [categoryError, setCategoryError] = useState<string | null>(null)
   const [saved, setSaved] = useState<{ replayed: boolean } | null>(null)
+
+  /*
+   * The purchase being corrected (domain-spec §8.5). The whole two-screen flow
+   * is reused rather than duplicated: an edit has to ask the same §3.2A question
+   * as an insert, and it can additionally MOVE the purchase across that
+   * boundary — a date pulled behind the last count drops the embedded count, a
+   * date pushed forward requires a new one. A separate edit form would have to
+   * re-implement that decision, and the copy that drifted would be the one used
+   * to fix mistakes.
+   *
+   * `editing.priorCountId` is excluded from the "latest count" lookup below,
+   * because the purchase's own embedded count is about to move with it.
+   */
+  const [editing, setEditing] = useState<PurchaseRow | null>(null)
+  const active = editing ? edit : record
 
   /*
    * ONE identifier per submission, not per attempt (domain-spec §8.1).
@@ -63,10 +81,36 @@ export function PurchasePage() {
    */
   const requestId = useRef<string | null>(null)
 
-  const latestCount = useLatestCount(step === 'stock' ? categoryId : null)
+  const latestCount = useLatestCount(
+    step === 'stock' ? categoryId : null,
+    editing?.priorCountId ?? null,
+  )
   const backdated = isBackdated(date, latestCount.data?.occurredOn ?? null)
 
   const category = (categories.data ?? []).find((c) => c.id === categoryId)
+
+  function startEdit(row: PurchaseRow) {
+    setEditing(row)
+    setStep('details')
+    setCategoryId(row.categoryId)
+    setDate(row.occurredOn)
+    setAmountText(String(row.amountAtCost).replace('.', ','))
+    setNote(row.note ?? '')
+    setSaved(null)
+    setAmountError(null)
+    setCategoryError(null)
+  }
+
+  function clearForm() {
+    setEditing(null)
+    setStep('details')
+    setCategoryId('')
+    setAmountText('')
+    setNote('')
+    setDate(today)
+    setAmountError(null)
+    setCategoryError(null)
+  }
 
   function toStockStep(e: React.FormEvent) {
     e.preventDefault()
@@ -85,6 +129,29 @@ export function PurchasePage() {
       setAmountError(parsed.error)
       return
     }
+
+    if (editing) {
+      // No request id: an edit sets fields to given values and converges on
+      // replay, where an insert would post the money twice.
+      edit.mutate(
+        {
+          id: editing.id,
+          categoryId,
+          date,
+          amount: parsed.value,
+          priorStock,
+          note: note.trim() || null,
+        },
+        {
+          onSuccess: () => {
+            setSaved({ replayed: false })
+            clearForm()
+          },
+        },
+      )
+      return
+    }
+
     requestId.current ??= crypto.randomUUID()
     record.mutate(
       {
@@ -117,6 +184,12 @@ export function PurchasePage() {
       {saved && (
         <p role="status" className="rounded-lg bg-black/5 p-3 text-sm dark:bg-white/10">
           {saved.replayed ? t('purchases.savedReplayed') : t('purchases.saved')}
+        </p>
+      )}
+
+      {editing && (
+        <p role="status" className="rounded-lg bg-black/5 p-3 text-sm dark:bg-white/10">
+          {t('common.editing')}
         </p>
       )}
 
@@ -159,9 +232,16 @@ export function PurchasePage() {
             )}
           </Field>
 
-          <button type="submit" className={primaryButtonClass}>
-            {t('common.next')}
-          </button>
+          <div className="flex gap-2">
+            <button type="submit" className={primaryButtonClass}>
+              {t('common.next')}
+            </button>
+            {editing && (
+              <button type="button" onClick={clearForm} className={secondaryButtonClass}>
+                {t('common.cancel')}
+              </button>
+            )}
+          </div>
         </form>
       ) : (
         <section className="flex flex-col gap-4">
@@ -176,7 +256,7 @@ export function PurchasePage() {
           ) : backdated ? (
             <BackdatedNotice
               lastCountOn={latestCount.data?.occurredOn ?? date}
-              busy={record.isPending}
+              busy={active.isPending}
               onBack={() => setStep('details')}
               onSave={() => save(null)}
             />
@@ -186,21 +266,22 @@ export function PurchasePage() {
               categoryName={category?.name ?? ''}
               categoryDescription={category?.description ?? ''}
               date={date}
-              busy={record.isPending}
+              busy={active.isPending}
+              initialValue={editing?.priorStockValue ?? null}
               onBack={() => setStep('details')}
               onAnswer={(priorStock) => save(priorStock)}
             />
           )}
 
-          {record.isError && (
+          {active.isError && (
             <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-              {t(`write.error.${writeErrorKey(record.error)}`)}
+              {t(`write.error.${writeErrorKey(active.error)}`)}
             </p>
           )}
         </section>
       )}
 
-      <RecentPurchases />
+      <RecentPurchases onEdit={startEdit} />
     </main>
   )
 }
@@ -266,7 +347,7 @@ function BackdatedNotice({
   )
 }
 
-function RecentPurchases() {
+function RecentPurchases({ onEdit }: { onEdit: (row: PurchaseRow) => void }) {
   const { t } = useTranslation()
   const recent = useRecentPurchases()
   const remove = useDeletePurchase()
@@ -289,6 +370,8 @@ function RecentPurchases() {
               row.priorCountId ? '' : ` · ${t('purchases.noCountAttached')}`
             }`}
             amount={<Money value={row.amountAtCost} kind="measured" />}
+            onEdit={() => onEdit(row)}
+            editLabel={t('common.edit')}
             onDelete={() => setPendingDelete(row.id)}
             deleteLabel={t('common.delete')}
           />

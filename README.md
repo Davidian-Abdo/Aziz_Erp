@@ -22,6 +22,7 @@ mechanism that makes the approach acceptable at all.
 | [`docs/architecture-spec.md`](docs/architecture-spec.md) | The technical design |
 | [`docs/v1.0_impl_plan.md`](docs/v1.0_impl_plan.md) | The build plan — **normative where it contradicts the specs** |
 | [`docs/plan_review.md`](docs/plan_review.md) | Review of the plan, with its findings |
+| [`docs/restore-runbook.md`](docs/restore-runbook.md) | How to get the books back from an encrypted backup |
 | [`current_state.md`](current_state.md) | Handoff log — read this first |
 | [`Hmdnah_Prompt.md`](Hmdnah_Prompt.md) | Session prompt for the agent on the Hetzner dev box |
 | [`Amer_Prompt.md`](Amer_Prompt.md) | Session prompt for the agent on the owner's Windows PC |
@@ -57,7 +58,15 @@ npm run db:reset     # drop schema, replay every migration + seed
 npm run db:test      # the pgTAP suite — the layer that matters
 npm run dev          # Vite dev server
 npm run verify       # lint + format + typecheck + component tests
+
+./scripts/restore-rehearse.sh   # prove the backup restores, end to end
 ```
+
+⚠ **`db:test` only passes against a database that has not yet traded.** Every
+fixture builds its own ledger and asserts absolute figures, so real purchases
+make it red over arithmetic that is perfectly correct. Run it against the local
+container or a restored copy — never against a live shop. See
+`current_state.md` §3.
 
 The pgTAP suite is the important one. It protects the arithmetic the store's
 decisions rest on, and **a wrong number there is worse than a crash, because

@@ -4,9 +4,11 @@ import {
   useChargeCategories,
   useCreateChargeCategory,
   useDeleteCharge,
+  useEditCharge,
   useRecentCharges,
   useRecordCharge,
   type ChargeNature,
+  type ChargeRow,
 } from '@/api/charges'
 import { useStoreToday } from '@/api/settings'
 import { AmountField } from '@/components/AmountField'
@@ -39,6 +41,7 @@ export function ChargesPage() {
   const today = useStoreToday()
   const categories = useChargeCategories()
   const record = useRecordCharge()
+  const edit = useEditCharge()
 
   const [categoryId, setCategoryId] = useState('')
   const [date, setDate] = useState(today)
@@ -49,6 +52,15 @@ export function ChargesPage() {
   const [saved, setSaved] = useState(false)
   const [adding, setAdding] = useState(false)
 
+  /*
+   * Correcting a charge reuses this form rather than opening a dialog of its own
+   * (domain-spec §8.5). The form already parses amounts, refuses future dates
+   * and carries the nature into the picker; a second copy would drift from it,
+   * and the one that drifted would be the one used to fix mistakes.
+   */
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const active = editingId ? edit : record
+
   const options = (categories.data ?? []).map((c) => ({
     id: c.id,
     name: c.name,
@@ -57,6 +69,29 @@ export function ChargesPage() {
     description: t(`charges.nature.${c.nature}`),
   }))
 
+  function reset() {
+    setEditingId(null)
+    setText('')
+    setNote('')
+    setDate(today)
+    setCategoryId('')
+    setAmountError(null)
+    setCategoryError(null)
+  }
+
+  function startEdit(row: ChargeRow) {
+    setEditingId(row.id)
+    setCategoryId(row.categoryId)
+    setDate(row.occurredOn)
+    // The stored amount is authoritative; formatting it back through the
+    // French decimal comma is what the user typed and what parseAmount reads.
+    setText(String(row.amount).replace('.', ','))
+    setNote(row.note ?? '')
+    setSaved(false)
+    setAmountError(null)
+    setCategoryError(null)
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     const parsed = parseAmount(text)
@@ -64,6 +99,26 @@ export function ChargesPage() {
     setCategoryError(categoryId ? null : t('charges.categoryRequired'))
     if (!parsed.ok || !categoryId) return
     setSaved(false)
+
+    if (editingId) {
+      edit.mutate(
+        {
+          id: editingId,
+          chargeCategoryId: categoryId,
+          date,
+          amount: parsed.value,
+          note: note.trim() || null,
+        },
+        {
+          onSuccess: () => {
+            setSaved(true)
+            reset()
+          },
+        },
+      )
+      return
+    }
+
     record.mutate(
       { chargeCategoryId: categoryId, date, amount: parsed.value, note: note.trim() || null },
       {
@@ -83,6 +138,12 @@ export function ChargesPage() {
       {saved && (
         <p role="status" className="rounded-lg bg-black/5 p-3 text-sm dark:bg-white/10">
           {t('charges.saved')}
+        </p>
+      )}
+
+      {editingId && (
+        <p role="status" className="rounded-lg bg-black/5 p-3 text-sm dark:bg-white/10">
+          {t('common.editing')}
         </p>
       )}
 
@@ -142,18 +203,29 @@ export function ChargesPage() {
           )}
         </Field>
 
-        {record.isError && (
+        {active.isError && (
           <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-            {t(`write.error.${writeErrorKey(record.error)}`)}
+            {t(`write.error.${writeErrorKey(active.error)}`)}
           </p>
         )}
 
-        <button type="submit" disabled={record.isPending} className={primaryButtonClass}>
-          {record.isPending ? t('charges.saving') : t('charges.save')}
-        </button>
+        <div className="flex gap-2">
+          <button type="submit" disabled={active.isPending} className={primaryButtonClass}>
+            {active.isPending
+              ? t('charges.saving')
+              : editingId
+                ? t('common.saveChanges')
+                : t('charges.save')}
+          </button>
+          {editingId && (
+            <button type="button" onClick={reset} className={secondaryButtonClass}>
+              {t('common.cancel')}
+            </button>
+          )}
+        </div>
       </form>
 
-      <RecentCharges />
+      <RecentCharges onEdit={startEdit} />
     </main>
   )
 }
@@ -246,7 +318,7 @@ function NewChargeCategory({
   )
 }
 
-function RecentCharges() {
+function RecentCharges({ onEdit }: { onEdit: (row: ChargeRow) => void }) {
   const { t } = useTranslation()
   const recent = useRecentCharges()
   const remove = useDeleteCharge()
@@ -267,6 +339,8 @@ function RecentCharges() {
             primary={row.categoryName}
             secondary={`${formatDateShort(row.occurredOn)} · ${t(`charges.nature.${row.nature}`)}`}
             amount={<Money value={row.amount} kind="measured" />}
+            onEdit={() => onEdit(row)}
+            editLabel={t('common.edit')}
             onDelete={() => setPendingDelete(row.id)}
             deleteLabel={t('common.delete')}
           />

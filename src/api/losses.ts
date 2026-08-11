@@ -42,6 +42,8 @@ export const LOSS_REASONS: { reason: LossReason; nature: LossNature }[] = [
 
 export type LossRow = {
   id: string
+  /** Needed to prefill the form when this row is edited (domain-spec §8.5). */
+  categoryId: string
   categoryName: string
   occurredOn: string
   amountAtCost: number
@@ -55,13 +57,16 @@ export function useRecentLosses(limit = 10) {
     queryFn: async (): Promise<LossRow[]> => {
       const { data, error } = await supabase
         .from('stock_loss')
-        .select('id, occurred_on, amount_at_cost, reason, note, article_category(name)')
+        .select(
+          'id, category_id, occurred_on, amount_at_cost, reason, note, article_category(name)',
+        )
         .order('occurred_on', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(limit)
       if (error) throw error
       return data.map((row) => ({
         id: row.id,
+        categoryId: row.category_id,
         categoryName: row.article_category?.name ?? '',
         occurredOn: row.occurred_on,
         amountAtCost: Number(row.amount_at_cost),
@@ -90,6 +95,46 @@ export function useRecordLoss() {
         reason: input.reason,
         note: input.note,
       })
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await invalidateLedger(qc)
+    },
+  })
+}
+
+/**
+ * Correcting an existing loss (domain-spec §8.5).
+ *
+ * An ordinary update, like a charge — one row, no companion. The field worth
+ * being able to correct is `reason`: it is what decides whether the amount is
+ * counted as the store's shrinkage or as the owner taking goods home
+ * (`loss_nature()` in SQL, §4.2), and those two must never be summed. Picking
+ * the wrong one from the list is exactly the mistake this screen exists to let
+ * the owner undo.
+ */
+export function useEditLoss() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      categoryId: string
+      date: string
+      amount: number
+      reason: LossReason
+      note: string | null
+    }) => {
+      const { error } = await supabase
+        .from('stock_loss')
+        .update({
+          category_id: input.categoryId,
+          occurred_on: input.date,
+          amount_at_cost: input.amount,
+          reason: input.reason,
+          note: input.note,
+        })
+        .eq('id', input.id)
       if (error) throw error
     },
     onSuccess: async () => {

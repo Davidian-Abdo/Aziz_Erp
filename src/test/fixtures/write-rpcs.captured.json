@@ -1,4 +1,12 @@
 {
+  "edit_purchase_backdated": {
+    "count_id": null,
+    "purchase_id": "99000000-0000-0000-0000-0000000000f1"
+  },
+  "edit_purchase_with_count": {
+    "count_id": "cc000000-0000-0000-0000-0000000000c1",
+    "purchase_id": "99000000-0000-0000-0000-0000000000f1"
+  },
   "expected_on_hand": 900.0,
   "expected_on_hand_never_counted": null,
   "plausibility_exceeds_bound": {

@@ -41,12 +41,22 @@ export function RecentRow({
   primary,
   secondary,
   amount,
+  onEdit,
+  editLabel,
   onDelete,
   deleteLabel,
 }: {
   primary: string
   secondary: string
   amount: React.ReactNode
+  /*
+   * Absent where a record cannot be corrected in place — an embedded count
+   * belongs to its purchase and is edited from there (domain-spec §8.5,
+   * 0014_edit_rpcs.sql). A row that offers an action which can only fail is
+   * worse than a row that offers none.
+   */
+  onEdit?: () => void
+  editLabel?: string
   onDelete?: () => void
   deleteLabel: string
 }) {
@@ -58,6 +68,16 @@ export function RecentRow({
       </div>
       <div className="flex shrink-0 items-center gap-3">
         {amount}
+        {onEdit && editLabel && (
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label={`${editLabel} — ${primary}`}
+            className="text-xs underline opacity-60"
+          >
+            {editLabel}
+          </button>
+        )}
         {onDelete && (
           <button
             type="button"

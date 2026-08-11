@@ -22,6 +22,12 @@ dist-ssr
 supabase/.temp
 supabase/.branches
 
+# Encrypted database dumps. They are encrypted, but they belong in the private
+# backup repository and never in this one — an AES256 file in a public history
+# is one leaked passphrase away from being the store's entire books.
+backups/
+*.sql.gpg
+
 # Test / build artefacts
 coverage
 playwright-report

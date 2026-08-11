@@ -68,6 +68,12 @@ export const fr = {
       back: 'Retour',
       cancel: 'Annuler',
       delete: 'Supprimer',
+      edit: 'Modifier',
+      saveChanges: 'Enregistrer les modifications',
+      // Shown while a record is loaded into the form. Without it the screen is
+      // indistinguishable from a fresh entry that happens to be prefilled, and
+      // the owner saves what they believe is a new record.
+      editing: 'Vous modifiez un enregistrement existant.',
       noteOptional: 'Note (facultatif)',
       unknownAmount: 'montant à saisir',
     },

@@ -37,6 +37,8 @@ const CATEGORIES = [
 const state = vi.hoisted(() => ({
   calls: [] as SweepInput[],
   verdict: 'ok' as Plausibility['verdict'],
+  edited: [] as unknown[],
+  recent: [] as unknown[],
 }))
 
 vi.mock('@/api/categories', () => ({
@@ -69,8 +71,17 @@ vi.mock('@/api/counts', () => ({
       ids.map((id, i) => [id, { occurredOn: '2026-07-31', valueAtCost: 1000 + i }]),
     ),
   }),
-  useRecentCounts: () => ({ isPending: false, data: [] }),
+  useRecentCounts: () => ({ isPending: false, data: state.recent }),
   useDeleteCount: () => ({ isPending: false, mutate: vi.fn() }),
+  useEditCount: () => ({
+    isPending: false,
+    isError: false,
+    error: null,
+    mutate: (input: unknown, opts?: { onSuccess?: () => void }) => {
+      state.edited.push(input)
+      opts?.onSuccess?.()
+    },
+  }),
   useRecordSweep: () => ({
     isPending: false,
     isError: false,
@@ -183,5 +194,88 @@ describe('month-end sweep', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('Renseignez chaque rayon')
     expect(state.calls).toHaveLength(0)
+  })
+})
+
+/*
+ * Editing a count (domain-spec §8.5), and the restriction that makes it safe.
+ *
+ * ⚠ The second test here is the important one, and it guards a defect rather
+ * than a feature. A count with `source = 'purchase'` describes the shelf before
+ * a specific delivery. Move its date or its category away from that delivery and
+ * the timeline is corrupted SILENTLY — `v_stock_event` takes the category from
+ * the count and the ordering anchor from the purchase, so the delivery ends up
+ * ordered against one date and valued against another, and every figure that
+ * comes out still looks plausible. The database refuses it (a deferred
+ * constraint trigger, 0014_edit_rpcs.sql); this asserts the screen never offers
+ * the action in the first place.
+ */
+describe('editing a count (domain-spec §8.5)', () => {
+  const STANDALONE = {
+    id: 'ccccdddd-1111-1111-1111-111111111111',
+    categoryId: CATEGORIES[0]!.id,
+    categoryName: 'Produits laitiers',
+    occurredOn: '2026-07-31',
+    valueAtCost: 1040,
+    source: 'standalone' as const,
+  }
+
+  const EMBEDDED = {
+    id: 'ccccdddd-2222-2222-2222-222222222222',
+    categoryId: CATEGORIES[1]!.id,
+    categoryName: CATEGORIES[1]!.name,
+    occurredOn: '2026-07-20',
+    valueAtCost: 500,
+    source: 'purchase' as const,
+  }
+
+  beforeEach(() => {
+    state.edited = []
+    state.calls = []
+  })
+
+  afterEach(() => {
+    state.recent = []
+  })
+
+  it('loads a standalone count into the single-count form and updates it', async () => {
+    state.recent = [STANDALONE]
+    const user = userEvent.setup({ delay: null })
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Modifier — Produits laitiers' }))
+
+    expect(screen.getByLabelText<HTMLInputElement>('Valeur au prix d’achat').value).toBe('1040')
+    expect(screen.getByText('Vous modifiez un enregistrement existant.')).toBeInTheDocument()
+
+    await user.clear(screen.getByLabelText('Valeur au prix d’achat'))
+    await user.type(screen.getByLabelText('Valeur au prix d’achat'), '980')
+    await user.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }))
+
+    await waitFor(() =>
+      expect(state.edited).toEqual([
+        {
+          id: STANDALONE.id,
+          categoryId: CATEGORIES[0]!.id,
+          date: '2026-07-31',
+          valueAtCost: 980,
+        },
+      ]),
+    )
+    // Not a second count on the same shelf and date, which is what an insert
+    // here would have been — and the unique index would have rejected it, so
+    // the user would have seen a duplicate-key error for a correction.
+    expect(state.calls).toHaveLength(0)
+  })
+
+  it('OFFERS NO EDIT on a count that belongs to a purchase', async () => {
+    state.recent = [EMBEDDED]
+    renderPage()
+
+    expect(
+      screen.queryByRole('button', { name: `Modifier — ${EMBEDDED.categoryName}` }),
+    ).not.toBeInTheDocument()
+    // The row is still listed — it is a real count and the owner should see it.
+    expect(screen.getAllByText(EMBEDDED.categoryName).length).toBeGreaterThan(0)
   })
 })
