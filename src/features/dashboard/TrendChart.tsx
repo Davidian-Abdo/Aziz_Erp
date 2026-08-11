@@ -80,12 +80,12 @@ export function TrendChart({ trend }: { trend: ReportTrend }) {
         <table className="w-full min-w-[34rem] text-sm">
           <caption className="sr-only">{t('dashboard.trend.caption')}</caption>
           <thead>
-            <tr className="border-b border-black/10 text-left text-xs opacity-70 dark:border-white/15">
-              <th scope="col" className="py-2 pr-3 font-medium">
+            <tr className="border-b border-black/10 text-start text-xs opacity-70 dark:border-white/15">
+              <th scope="col" className="py-2 pe-3 font-medium">
                 {t('dashboard.trend.month')}
               </th>
               {SERIES.map((s) => (
-                <th key={s.key} scope="col" className="py-2 pr-3 text-right font-medium">
+                <th key={s.key} scope="col" className="py-2 pe-3 text-end font-medium">
                   {label(s.key)}
                 </th>
               ))}
@@ -94,19 +94,19 @@ export function TrendChart({ trend }: { trend: ReportTrend }) {
           <tbody className="divide-y divide-black/5 dark:divide-white/10">
             {trend.map((row) => (
               <tr key={row.month}>
-                <th scope="row" className="py-2 pr-3 text-left font-normal">
+                <th scope="row" className="py-2 pe-3 text-start font-normal">
                   {row.month}
                   {/* The current month is partial by construction: report_period
                       clamped its end to today. Without this the last point looks
                       like trade collapsing. */}
                   {row.effective_to < row.to && (
-                    <span className="ml-1 text-xs opacity-60">
+                    <span className="ms-1 text-xs opacity-60">
                       {t('dashboard.trend.inProgress')}
                     </span>
                   )}
                 </th>
                 {SERIES.map((s) => (
-                  <td key={s.key} className="py-2 pr-3 text-right">
+                  <td key={s.key} className="py-2 pe-3 text-end">
                     <Money value={row[s.key]} kind={s.kind} />
                   </td>
                 ))}

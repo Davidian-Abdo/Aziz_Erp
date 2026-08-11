@@ -27,7 +27,7 @@ export function AppLayout() {
     <div className="flex min-h-full flex-col md:flex-row">
       <nav
         aria-label={t('nav.dashboard')}
-        className="order-2 border-t border-black/10 bg-white/80 backdrop-blur md:order-1 md:w-56 md:shrink-0 md:border-t-0 md:border-r md:bg-transparent dark:border-white/15 dark:bg-black/60 md:dark:bg-transparent"
+        className="order-2 border-t border-black/10 bg-white/80 backdrop-blur md:order-1 md:w-56 md:shrink-0 md:border-t-0 md:border-e md:bg-transparent dark:border-white/15 dark:bg-black/60 md:dark:bg-transparent"
       >
         <div className="hidden px-4 py-5 md:block">
           <p className="text-lg font-semibold">{storeName}</p>
@@ -41,7 +41,7 @@ export function AppLayout() {
                 to={r.to}
                 end={r.end}
                 className={({ isActive }) =>
-                  `block px-2 py-3 text-center text-xs md:rounded-lg md:px-3 md:text-left md:text-sm ${
+                  `block px-2 py-3 text-center text-xs md:rounded-lg md:px-3 md:text-start md:text-sm ${
                     isActive ? 'font-semibold' : 'opacity-70'
                   } ${isActive ? 'bg-black/5 dark:bg-white/10' : ''}`
                 }

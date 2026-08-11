@@ -61,11 +61,11 @@ export function ProfitWaterfall({ report }: { report: ReportPeriod }) {
         <caption className="sr-only">{t('dashboard.waterfall.caption')}</caption>
         <tbody>
           <tr>
-            <td className="py-1 pr-2 text-center opacity-50" aria-hidden="true" />
-            <th scope="row" className="py-1 text-left font-normal">
+            <td className="py-1 pe-2 text-center opacity-50" aria-hidden="true" />
+            <th scope="row" className="py-1 text-start font-normal">
               {t('dashboard.waterfall.revenue')}
             </th>
-            <td className="py-1 text-right">
+            <td className="py-1 text-end">
               <Money value={report.modelled.revenue_est} kind="modelled" />
             </td>
           </tr>
@@ -79,14 +79,14 @@ export function ProfitWaterfall({ report }: { report: ReportPeriod }) {
                   : undefined
               }
             >
-              <td className="py-1 pr-2 text-center opacity-50">{step.op}</td>
+              <td className="py-1 pe-2 text-center opacity-50">{step.op}</td>
               <th
                 scope="row"
-                className={`py-1 text-left ${step.op === '=' ? 'font-semibold' : 'font-normal'}`}
+                className={`py-1 text-start ${step.op === '=' ? 'font-semibold' : 'font-normal'}`}
               >
                 {t(`dashboard.waterfall.${step.key}`)}
               </th>
-              <td className="py-1 text-right">
+              <td className="py-1 text-end">
                 <Money value={step.value} kind={step.kind} />
               </td>
             </tr>

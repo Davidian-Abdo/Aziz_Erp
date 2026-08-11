@@ -295,7 +295,7 @@ function CategoryRow({ category }: { category: CategoryLike }) {
             <p className={`font-medium ${!category.active ? 'opacity-50' : ''}`}>
               {category.name}
               {!category.active && (
-                <span className="ml-2 text-xs opacity-60">{t('settings.categories.inactive')}</span>
+                <span className="ms-2 text-xs opacity-60">{t('settings.categories.inactive')}</span>
               )}
             </p>
             {category.description && <p className="text-xs opacity-60">{category.description}</p>}
@@ -712,12 +712,12 @@ function ChargeCategoryRow({ cat }: { cat: ChargeCatFull }) {
             <p className={`font-medium ${!cat.active ? 'opacity-50' : ''}`}>
               {cat.name}
               {!cat.active && (
-                <span className="ml-2 text-xs opacity-60">
+                <span className="ms-2 text-xs opacity-60">
                   {t('settings.chargeCategories.inactive')}
                 </span>
               )}
               {cat.isSystem && (
-                <span className="ml-2 text-xs opacity-50">
+                <span className="ms-2 text-xs opacity-50">
                   {t('settings.chargeCategories.system')}
                 </span>
               )}

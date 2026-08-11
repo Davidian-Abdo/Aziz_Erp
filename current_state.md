@@ -1349,3 +1349,73 @@ category names in the table above.
 
 **Machine:** Windows PC. No container started. No code changed. Committed and
 pushed to `origin/main`.
+
+### Entry 15 — 2026-08-11 — Amer, owner's Windows PC — Phase 8 built (8a/8b/8c/8d); visual verification partial
+
+**Phase 8 (Arabisation) is built and passing all gates.** `npm run verify` green
+— lint, format, `tsc -b`, **124 tests across 16 files** (unchanged count: the
+language switch is not a component-logic change). `npm run build` clean
+(724 kB / 204 kB gzipped; +16 kB vs Entry 13, all from the Arabic translation
+file).
+
+**Owner confirmed** the Arabic category names proposed in Entry 14 — all 24 used
+verbatim. Owner chose Western digits (0–9) with Arabic decimal separators (`ar-MA`
+locale).
+
+**What was built.**
+
+| Stream | Status | Files |
+|---|---|---|
+| 8a — Translation | ✅ done | `src/i18n/ar.ts` (full translation); `src/i18n/index.ts` (lng → `ar`, fr kept as fallback); `index.html` (`lang="ar" dir="rtl"`); `vite.config.ts` (PWA manifest lang/description) |
+| 8b — RTL layout | ✅ done | `StockByCategory.tsx`, `TrendChart.tsx`: `pr-3→pe-3`, `text-left→text-start`, `text-right→text-end`, `ml-1→ms-1`. `ProfitWaterfall.tsx`: `pr-2→pe-2`, `text-left→text-start`, `text-right→text-end`. `AppLayout.tsx`: `md:border-r→md:border-e`, `md:text-left→md:text-start`. `SettingsPage.tsx`: `ml-2→ms-2` (3×) |
+| 8c — Category data | ✅ written | `supabase/migrations/0013_arabic_categories.sql` — UPDATE on all 24 categories; `seed.sql` updated for new projects |
+| 8d — Locale | ✅ in migration | `UPDATE app_settings SET locale = 'ar-MA'` in same migration |
+
+**One test-infrastructure change.** `src/test/setup.ts` now calls
+`await i18n.changeLanguage('fr')` after importing the bundle. The unit tests
+assert on French strings throughout (behavioral assertions, not language ones),
+and switching the test harness to Arabic would mean updating every string matcher
+without gaining any behavioral coverage. The Arabic/RTL output is a visual
+property, correctly verified in a browser at 375 px, not in jsdom.
+
+**Verified, and on what.**
+
+- **`npm run verify`**: lint, format, `tsc -b`, 124 Vitest tests — green.
+- **`npm run build`**: clean.
+- **Login screen rendered in Chromium at 375 px width.** RTL layout correct:
+  "Aziz ERP" right-aligned, subtitle right-aligned, labels right-aligned, "تسجيل
+  الدخول" button full-width with Arabic text. No clipped labels, no LTR leak on
+  the login screen.
+
+**Not verified.**
+
+- **Authenticated screens** (dashboard, entries, settings): no `.env` in this
+  session (gitignored, does not travel with a pull). The login screen rendered
+  correctly; the rest requires real Supabase credentials. The Playwright suite
+  covers the authenticated flows behaviourally but not visually.
+- **Migration not applied to aziz-dev**: no Supabase CLI on this machine and no
+  `.env` with database password. The migration SQL is in the repo at
+  `supabase/migrations/0013_arabic_categories.sql`. The owner can apply it from
+  the Supabase SQL editor, or by running `supabase db push` with credentials.
+  Until applied, aziz-dev still shows French category names.
+
+**Immediate owner action needed to finish Phase 8.**
+
+1. **Provide `.env`** (or run `npm run dev` yourself with the real keys) so the
+   authenticated screens can be walked at 375 px width and the RTL audit completed.
+2. **Apply migration `0013_arabic_categories.sql`** to aziz-dev — either paste the
+   SQL into the Supabase SQL editor, or run `supabase db push` from a machine that
+   has the CLI and credentials. This renames all 24 categories to Arabic and sets
+   `locale = 'ar-MA'`.
+3. **Verify every screen at 375 px** after the migration is applied and the app is
+   pointed at aziz-dev. Record what you see — correct and incorrect — in the next
+   entry with the same specificity as a failing test. Do not mark Phase 8 closed
+   without this visual pass.
+
+Phase 8 is formally closed when: `npm run verify` green ✓, `npm run build`
+clean ✓, every screen verified in Chromium at 375 px (pending owner step 1–3),
+and migration applied to aziz-dev (pending owner step 2).
+
+**Machine:** Windows PC. No container started. Dev server started on :5201 briefly
+for screenshot, then stopped. `npm run verify` green. Committed and pushed to
+`origin/main`.

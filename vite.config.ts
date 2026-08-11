@@ -16,12 +16,12 @@ export default defineConfig({
       manifest: {
         name: 'Aziz ERP',
         short_name: 'Aziz',
-        description: "Gestion de l'épicerie Aziz",
+        description: 'إدارة بقالة عزيز',
         theme_color: '#863bff',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',
-        lang: 'fr',
+        lang: 'ar',
         icons: [
           { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },

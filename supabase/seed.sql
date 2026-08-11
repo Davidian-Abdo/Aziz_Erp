@@ -10,7 +10,7 @@
 -- ---------------------------------------------------------------------------
 
 insert into app_settings (id, currency_code, locale, store_name, timezone)
-values (1, 'MAD', 'fr', 'Aziz', 'Africa/Casablanca')
+values (1, 'MAD', 'ar-MA', 'Aziz', 'Africa/Casablanca')
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -23,18 +23,18 @@ on conflict (id) do nothing;
 -- ---------------------------------------------------------------------------
 
 insert into article_category (name, description, sort_order) values
-  ('Boissons',                 'eau, sodas, jus, thé, café',                     10),
-  ('Produits laitiers',        'lait, fromage, yaourt, beurre, crème',           20),
-  ('Épicerie sèche',           'riz, pâtes, farine, sucre, huile, semoule',      30),
-  ('Conserves',                'thon, sardines, tomate, légumes en boîte',       40),
-  ('Fruits et légumes',        'fruits et légumes frais',                        50),
-  ('Pain et pâtisserie',       'pain, viennoiseries, gâteaux',                   60),
-  ('Confiserie et snacks',     'bonbons, chocolat, chips, biscuits',             70),
-  ('Produits d''entretien',    'javel, détergent, éponges, sacs poubelle',       80),
-  ('Hygiène et cosmétique',    'savon, shampoing, dentifrice, couches',          90),
-  ('Surgelés',                 'glaces, légumes surgelés, poisson surgelé',     100),
-  ('Tabac',                    'cigarettes, tabac',                             110),
-  ('Divers',                   'tout ce qui n''entre pas dans les autres rayons', 120)
+  ('مشروبات',         'ماء، مشروبات غازية، عصير، شاي، قهوة',          10),
+  ('منتجات الألبان',  'حليب، جبن، زبادي، زبدة، كريمة',                 20),
+  ('بقالة جافة',      'أرز، معكرونة، دقيق، سكر، زيت، سميد',            30),
+  ('معلبات',          'تونة، سردين، صلصة طماطم، خضروات معلبة',         40),
+  ('فواكه وخضروات',   'فواكه وخضروات طازجة',                            50),
+  ('خبز ومخبوزات',    'خبز، معجنات، كعك',                               60),
+  ('حلوى وسناكس',     'حلوى، شوكولاتة، شيبس، بسكويت',                  70),
+  ('منتجات التنظيف',  'جافيل، منظف، إسفنج، أكياس القمامة',             80),
+  ('نظافة وتجميل',    'صابون، شامبو، معجون أسنان، حفاضات',              90),
+  ('مجمدات',          'آيس كريم، خضروات مجمدة، سمك مجمد',             100),
+  ('تبغ',             'سجائر، تبغ',                                    110),
+  ('متنوعات',         'كل ما لا يدخل في الأقسام الأخرى',               120)
 on conflict (name) do nothing;
 
 -- Every category starts at 20%, effective from its creation date.
@@ -59,16 +59,16 @@ where not exists (
 -- ---------------------------------------------------------------------------
 
 insert into charge_category (name, nature, is_system, sort_order) values
-  ('Salaires',                    'operating',  true,  10),
-  ('Loyer',                       'operating',  true,  20),
-  ('Électricité et eau',          'operating',  true,  30),
-  ('Transport et livraison',      'operating',  true,  40),
-  ('Taxes et licences',           'operating',  true,  50),
-  ('Entretien et réparations',    'operating',  true,  60),
-  ('Téléphone et internet',       'operating',  true,  70),
-  ('Emballage et fournitures',    'operating',  true,  80),
-  ('Dépenses personnelles',       'owner_draw', true,  90),
-  ('Dépenses familiales',         'owner_draw', true, 100),
-  ('Événements exceptionnels',    'owner_draw', true, 110),
-  ('Autres',                      'operating',  true, 120)
+  ('رواتب',           'operating',  true,  10),
+  ('إيجار',           'operating',  true,  20),
+  ('كهرباء وماء',     'operating',  true,  30),
+  ('نقل وتوصيل',      'operating',  true,  40),
+  ('ضرائب ورسوم',     'operating',  true,  50),
+  ('صيانة وإصلاحات',  'operating',  true,  60),
+  ('هاتف وإنترنت',    'operating',  true,  70),
+  ('تغليف ولوازم',    'operating',  true,  80),
+  ('مصاريف شخصية',    'owner_draw', true,  90),
+  ('مصاريف عائلية',   'owner_draw', true, 100),
+  ('مناسبات خاصة',    'owner_draw', true, 110),
+  ('أخرى',            'operating',  true, 120)
 on conflict (name) do nothing;

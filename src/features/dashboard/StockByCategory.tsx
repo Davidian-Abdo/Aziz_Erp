@@ -34,29 +34,29 @@ export function StockByCategory({ report }: { report: ReportPeriod }) {
       <div className="mt-3 -mx-4 overflow-x-auto px-4">
         <table className="w-full min-w-[46rem] text-sm">
           <thead>
-            <tr className="border-b border-black/10 text-left text-xs opacity-70 dark:border-white/15">
-              <th scope="col" className="py-2 pr-3 font-medium">
+            <tr className="border-b border-black/10 text-start text-xs opacity-70 dark:border-white/15">
+              <th scope="col" className="py-2 pe-3 font-medium">
                 {t('dashboard.stock.category')}
               </th>
-              <th scope="col" className="py-2 pr-3 text-right font-medium">
+              <th scope="col" className="py-2 pe-3 text-end font-medium">
                 {t('dashboard.stock.lastCount')}
               </th>
-              <th scope="col" className="py-2 pr-3 font-medium">
+              <th scope="col" className="py-2 pe-3 font-medium">
                 {t('dashboard.stock.countDate')}
               </th>
-              <th scope="col" className="py-2 pr-3 text-right font-medium">
+              <th scope="col" className="py-2 pe-3 text-end font-medium">
                 {t('dashboard.stock.freshness')}
               </th>
-              <th scope="col" className="py-2 pr-3 text-right font-medium">
+              <th scope="col" className="py-2 pe-3 text-end font-medium">
                 {t('dashboard.stock.purchasedSince')}
               </th>
-              <th scope="col" className="py-2 pr-3 text-right font-medium">
+              <th scope="col" className="py-2 pe-3 text-end font-medium">
                 {t('dashboard.stock.markup')}
               </th>
-              <th scope="col" className="py-2 pr-3 text-right font-medium">
+              <th scope="col" className="py-2 pe-3 text-end font-medium">
                 {t('dashboard.stock.goodsSold')}
               </th>
-              <th scope="col" className="py-2 text-right font-medium">
+              <th scope="col" className="py-2 text-end font-medium">
                 {t('dashboard.stock.grossProfit')}
               </th>
             </tr>
@@ -65,42 +65,42 @@ export function StockByCategory({ report }: { report: ReportPeriod }) {
           <tbody className="divide-y divide-black/5 dark:divide-white/10">
             {report.by_category.map((row) => (
               <tr key={row.category_id}>
-                <th scope="row" className="py-2 pr-3 text-left font-normal">
+                <th scope="row" className="py-2 pe-3 text-start font-normal">
                   {row.name}
                 </th>
-                <td className="py-2 pr-3 text-right">
+                <td className="py-2 pe-3 text-end">
                   <Money value={row.last_count_value} kind="measured" />
                 </td>
-                <td className="py-2 pr-3">
+                <td className="py-2 pe-3">
                   {row.last_count_on ? (
                     formatDateShort(row.last_count_on)
                   ) : (
                     <span className="opacity-70">{t('dashboard.stock.never')}</span>
                   )}
                 </td>
-                <td className="py-2 pr-3 text-right tabular">
+                <td className="py-2 pe-3 text-end tabular">
                   {row.days_since_count === null
                     ? '—'
                     : t('dashboard.stock.days', { count: row.days_since_count })}
                 </td>
-                <td className="py-2 pr-3 text-right">
+                <td className="py-2 pe-3 text-end">
                   <Money value={row.unsettled_purchases} kind="measured" />
                 </td>
-                <td className="py-2 pr-3 text-right tabular">
+                <td className="py-2 pe-3 text-end tabular">
                   {row.markup_pct === null ? (
                     <span title={t('dashboard.quality.anomaly.no_markup')}>—</span>
                   ) : (
                     t('dashboard.stock.markupValue', { pct: row.markup_pct })
                   )}
                 </td>
-                <td className="py-2 pr-3 text-right">
+                <td className="py-2 pe-3 text-end">
                   <Money
                     value={row.goods_sold_at_cost}
                     kind="modelled"
                     markupPct={row.markup_pct}
                   />
                 </td>
-                <td className="py-2 text-right">
+                <td className="py-2 text-end">
                   <Money value={row.gross_profit_est} kind="modelled" markupPct={row.markup_pct} />
                 </td>
               </tr>
@@ -109,22 +109,22 @@ export function StockByCategory({ report }: { report: ReportPeriod }) {
 
           <tfoot>
             <tr className="border-t border-black/15 font-semibold dark:border-white/20">
-              <th scope="row" className="py-2 pr-3 text-left">
+              <th scope="row" className="py-2 pe-3 text-start">
                 {t('dashboard.stock.total')}
               </th>
-              <td className="py-2 pr-3 text-right">
+              <td className="py-2 pe-3 text-end">
                 <Money value={report.stock_on_hand.total_last_counted} kind="measured" />
               </td>
-              <td className="py-2 pr-3" />
-              <td className="py-2 pr-3" />
-              <td className="py-2 pr-3 text-right">
+              <td className="py-2 pe-3" />
+              <td className="py-2 pe-3" />
+              <td className="py-2 pe-3 text-end">
                 <Money value={report.coverage.unsettled_purchases} kind="measured" />
               </td>
-              <td className="py-2 pr-3" />
-              <td className="py-2 pr-3 text-right">
+              <td className="py-2 pe-3" />
+              <td className="py-2 pe-3 text-end">
                 <Money value={report.modelled.goods_sold_at_cost} kind="modelled" />
               </td>
-              <td className="py-2 text-right">
+              <td className="py-2 text-end">
                 <Money value={report.modelled.gross_profit_est} kind="modelled" />
               </td>
             </tr>
