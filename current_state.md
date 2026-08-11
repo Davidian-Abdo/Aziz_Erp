@@ -1419,3 +1419,59 @@ and migration applied to aziz-dev (pending owner step 2).
 **Machine:** Windows PC. No container started. Dev server started on :5201 briefly
 for screenshot, then stopped. `npm run verify` green. Committed and pushed to
 `origin/main`.
+
+### Entry 16 — 2026-08-11 — Amer, owner's Windows PC — Phase 8 code confirmed green; handoff to Hmdnah for migration push
+
+**`npm run verify` confirmed green after the Phase 8 push: 124/124 tests, 16
+files, clean lint and format.** No code changed this session — this entry exists
+only to hand off the one remaining Phase 8 task that requires the Supabase CLI.
+
+**What is done (as of Entry 15 commit `ed316fc`).**
+
+| Stream | Status |
+|---|---|
+| 8a — Translation (`src/i18n/ar.ts`, `index.html lang="ar" dir="rtl"`) | ✅ shipped |
+| 8b — RTL layout (logical Tailwind utilities in 5 component files) | ✅ shipped |
+| 8c — Arabic category names (`0013_arabic_categories.sql`, `seed.sql`) | ✅ written, **not yet applied to aziz-dev** |
+| 8d — Locale `ar-MA` (in same migration) | ✅ written, **not yet applied to aziz-dev** |
+
+**Hmdnah's task — single session, in order.**
+
+1. `git pull` — the Phase 8 code is on `origin/main` since commit `ed316fc`.
+2. Apply migration 0013 to **aziz-dev**:
+   ```bash
+   supabase db push --db-url "$SUPABASE_DB_URL"
+   ```
+   where `SUPABASE_DB_URL` is the aziz-dev database connection string (needs the
+   database password). The CLI is at `~/bin/supabase` (v2.111.0). The migration
+   file is `supabase/migrations/0013_arabic_categories.sql` — 24 pure `UPDATE`
+   statements on `article_category` and `charge_category`, plus
+   `UPDATE app_settings SET locale = 'ar-MA'`. No schema changes, no new
+   functions, no grant sweep needed.
+3. **Verify the pgTAP suite still passes.** The migration is data-only and the
+   suite does not assert on category names, so this should be 275/275. Run
+   against the Supabase dev project:
+   ```bash
+   SUPABASE_DB_URL="…" ./scripts/db.sh test
+   ```
+   Record the count in your entry.
+4. Run `npm run verify` to confirm the 124 Vitest tests are still green after
+   the pull (the test setup resets to French; no test asserts on Arabic strings,
+   so nothing should break).
+
+**What Hmdnah cannot do.** The visual walk of every screen at 375 px remains
+Amer's — that box has no browser. Record in your entry that the migration is
+applied and pgTAP passes; the visual verification is noted as still open and
+will be done by Amer once the owner provides `.env`.
+
+**⚠ Amer still owes the owner a visual pass of authenticated screens at 375 px.**
+The login screen was verified in Entry 15. Every other screen — dashboard KPIs,
+eight-column category table, profit waterfall, trend chart, all entry forms,
+settings — has never been rendered in a browser in Arabic. That is the last gate
+before Phase 8 can be formally closed. Amer needs `.env` (VITE_SUPABASE_URL +
+VITE_SUPABASE_ANON_KEY for aziz-dev) to start the dev server and walk them.
+
+**Machine:** Windows PC. No container started. No code changed.
+`npm run verify` green (124/124). No new commit — this entry is appended to the
+same working tree; Hmdnah will commit it as part of their entry or leave it for
+Amer to commit after the visual pass.
