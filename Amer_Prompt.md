@@ -158,6 +158,14 @@ verification and it has never been done. If something is unreadable, say so in
 your entry with the same weight as a failing test — a figure the owner cannot
 read is a figure the owner does not have.
 
+**RTL layout changes (Phase 8) must be verified in a browser.** When doing the
+Arabisation phase, `npm run verify` catches translation key mismatches and type
+errors but cannot detect a mirrored button, a clipped Arabic label, or a
+left-aligned element that should be right-aligned. After applying the RTL
+changes, open the app at 375 px width and walk every screen. Record what you
+see — correct and incorrect — in the entry with the same specificity as a
+failing test. Do not mark Phase 8 closed on `npm run verify` alone.
+
 ## What to watch for on Windows
 
 - **`scripts/db.sh` is bash.** `npm run db:up` / `db:reset` / `db:test` will not

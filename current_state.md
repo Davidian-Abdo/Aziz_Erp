@@ -1264,3 +1264,88 @@ volume `aziz_erp_pg_data` kept (port 5434 free). `npm run verify` green,
 the deploy workflow has run once cleanly, Phase 7 is functionally complete.
 Phase 7 is formally closed when the encrypted backup and rehearsed restore are
 also done (step 8).
+
+### Entry 14 — 2026-08-11 — Amer, owner's Windows PC — Phase 8 (Arabisation) scoped; planning only
+
+**The owner requested full Arabic UI and Arabic article/charge category names.**
+No code was changed this session. The requirement was analysed, Phase 8 was
+added to `docs/v1.0_impl_plan.md`, `Amer_Prompt.md` was updated with a
+standing RTL visual-verification rule, and this entry records what the next
+session must do.
+
+**The four work streams, in order.**
+
+**8a — Translation.** Every UI string lives in `src/i18n/fr.ts` and is already
+wired through i18next with an `ar` slot designed in (plan §1.2, Q4 comment).
+Work: create `src/i18n/ar.ts` with all ~150 strings translated to Arabic;
+change `src/i18n/index.ts` `lng` to `'ar'`; change `index.html` to
+`lang="ar" dir="rtl"`. This is purely additive — no existing code changes
+beyond those two config lines.
+
+**8b — RTL layout.** The entire UI was built LTR. Every physical directional
+Tailwind utility (`ml-`, `mr-`, `pl-`, `pr-`, `left-`, `right-`, `text-left`,
+`border-l/-r`, `rounded-l-*/-r-*`) will render mirrored. Replace with logical
+utilities (`ms-`, `me-`, `ps-`, `pe-`, `start-`, `end-`, `text-start`,
+`border-s/-e`, `rounded-s-*/-e-*`) — Tailwind v4 flips these automatically when
+`dir="rtl"` is set on `<html>`. **Cannot be verified without a browser.** Walk
+every screen at 375 px width after the change.
+
+**8c — Category data.** The 12 article categories and 12 charge categories are
+stored in the database in French. They are data, not strings — they cannot come
+from a translation file. A migration `0013_arabic_categories.sql` will `UPDATE`
+both tables. `seed.sql` must be updated in the same commit so future projects
+start with Arabic names.
+
+⚠ **The owner must supply or approve the Arabic names before 8c can be
+written.** The current French names and proposed starting points are:
+
+| French | Suggested Arabic | Description |
+|---|---|---|
+| Boissons | مشروبات | ماء، مشروبات غازية، عصير، شاي، قهوة |
+| Produits laitiers | منتجات الألبان | حليب، جبن، زبادي، زبدة، كريمة |
+| Épicerie sèche | بقالة جافة | أرز، معكرونة، دقيق، سكر، زيت، سميد |
+| Conserves | معلبات | تونة، سردين، صلصة طماطم، خضروات معلبة |
+| Fruits et légumes | فواكه وخضروات | فواكه وخضروات طازجة |
+| Pain et pâtisserie | خبز ومخبوزات | خبز، معجنات، كعك |
+| Confiserie et snacks | حلوى وسناكس | حلوى، شوكولاتة، شيبس، بسكويت |
+| Produits d'entretien | منتجات التنظيف | جافيل، منظف، إسفنج، أكياس قمامة |
+| Hygiène et cosmétique | نظافة وتجميل | صابون، شامبو، معجون أسنان، حفاضات |
+| Surgelés | مجمدات | آيس كريم، خضروات مجمدة، سمك مجمد |
+| Tabac | تبغ | سجائر، تبغ |
+| Divers | متنوعات | كل ما لا يدخل في الأقسام الأخرى |
+
+Charge categories (all names, no description field):
+
+| French | Suggested Arabic |
+|---|---|
+| Salaires | رواتب |
+| Loyer | إيجار |
+| Électricité et eau | كهرباء وماء |
+| Transport et livraison | نقل وتوصيل |
+| Taxes et licences | ضرائب ورسوم |
+| Entretien et réparations | صيانة وإصلاحات |
+| Téléphone et internet | هاتف وإنترنت |
+| Emballage et fournitures | تغليف ولوازم |
+| Dépenses personnelles | مصاريف شخصية |
+| Dépenses familiales | مصاريف عائلية |
+| Événements exceptionnels | مناسبات خاصة |
+| Autres | أخرى |
+
+The next session should confirm these names with the owner (or take corrections)
+before writing the migration.
+
+**8d — Locale.** Same migration as 8c: `UPDATE app_settings SET locale =
+'ar-MA' WHERE id = 1`. Switches number formatting to Moroccan Arabic conventions
+(Western numerals, Arabic decimal/thousands separators). Verify visually — every
+`<Money>` render is affected.
+
+**Exit criterion (from the plan):** `npm run verify` green; `npm run build`
+clean; every screen rendered in Chromium at 375 px — legible Arabic, correct RTL
+alignment, no clipped labels, no LTR leak. Playwright suite still passes against
+aziz-dev. Migration applied to aziz-dev.
+
+**Owner input needed before 8c can be written:** confirm or correct the Arabic
+category names in the table above.
+
+**Machine:** Windows PC. No container started. No code changed. Committed and
+pushed to `origin/main`.
