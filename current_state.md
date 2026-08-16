@@ -1983,12 +1983,22 @@ been proved on a machine that is neither of the two dev boxes.
    link beside its Delete, so on a phone that row now carries a category name, a
    date, an amount and two text buttons. Nothing has looked at it.
 
-**Box:** `aziz_erp_pg` recreated on :5434 for the pgTAP run and **left running**
-— unlike Entry 17, which removed it. Removing it is a one-command teardown
-(`docker rm -f aziz_erp_pg`) and the named volume `aziz_erp_pg_data` is kept
-either way; it is left up because the next session on this box will want it and
-memory was never tight (≈1.2 GiB available throughout, 512 MB cap on the
-container). If another project needs the room, take it down. No other project
+**Box:** `aziz_erp_pg` recreated on :5434 for the pgTAP run and **removed again
+at the end of the session**, as Entry 17 did. It was briefly left running on the
+reasoning that the next session would want it; the owner asked for it back the
+same day, while other projects were running their tests, so it went. The named
+volume `aziz_erp_pg_data` is kept, port 5434 is free, and `npm run db:up`
+recreates the container with the schema intact.
+
+⚠ **Recorded because it corrects the reasoning and not just the state: removing
+it freed about 10 MB.** All thirteen containers on this box together account for
+roughly 294 MB, while ~2.7 GiB was in use — the rest is host processes, other
+agents' `vitest`, `tsc` and `npm` runs. A Postgres container looks like it should
+free far more than it does, because its resident set is mostly shared buffers and
+page cache the kernel was already reclaiming on demand. **On this box, a
+container is not where the memory goes.** A future session hunting for room
+should look outside Docker first, before invoking the §6 pause ladder over
+something that will not help. No other project
 touched; `portfolio-caddy-1` and `beamstack-contact` untouched and up (§6a hard
 limit), as were `planitor-pg`, `chantier_test_pg`, `chantier_test_redis`,
 `mdo-dev-postgres-1`. §6 pause ladder never invoked. `package-lock.json`
