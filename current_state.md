@@ -1937,14 +1937,34 @@ instructions:
   unexecuted and unseen. **The rewritten specs are typechecked, not run** — that
   is a weaker claim than it looks, and this entry exists partly because the
   previous version of them typechecked too.
-- **No workflow has run in CI.** Deploy, Migrate, Keepalive and Backup remain
-  owner-side and untested.
 - **`aziz-prod` does not exist.**
+
+**⚠ Correction to this entry, made after pushing it.** The paragraph above
+originally said *"no workflow has run in CI"*, copied forward from Entry 17. That
+was wrong, and checking took one `gh run list`. **Keepalive and Backup have been
+firing on their cron schedules and failing since at least 2026-08-10** — Backup
+every Sunday 03:00 UTC, Keepalive every three days. Both fail at the first step
+that needs an owner secret (`Dump and encrypt`; `Authenticate and ping
+store_today`), which is the expected behaviour of a correct workflow with no
+credentials, but it means **the repository has had a red Actions tab for a week
+and nobody looked.** The keepalive failing is not cosmetic: it exists to stop a
+free Supabase project pausing after 7 idle days, and it has never once succeeded.
+
+**The genuinely new information, from the Deploy run this push triggered:**
+`npm ci`, `npm run verify` and `npm run build` all **pass on a clean GitHub
+runner**, failing only at the Cloudflare step for a missing `CF_API_TOKEN`. That
+settles Entry 17's open question about whether this box's `package-lock.json`
+normalisation would hold elsewhere — a clean-slate `npm ci` on a different npm
+version reproduces the build. It is also the first time this project's gates have
+been proved on a machine that is neither of the two dev boxes.
 
 **Owner action items, in order.**
 
 1. **Disable public signup on aziz-dev.** Seventh entry. One dashboard toggle;
    the verification command is in `deploy-runbook.md` §2.
+1b. **Look at the Actions tab.** Keepalive and Backup have been failing on
+   schedule for a week for want of secrets (see the correction above). Every one
+   of those secrets is listed, in order, in `deploy-runbook.md` §8 and §9.
 2. **Follow `docs/deploy-runbook.md` from §1.** It is written to be worked
    through in order and each step says how to know it worked.
 3. Give Amer `.env` (dev URL + anon key) and `E2E_EMAIL` / `E2E_PASSWORD` for an
