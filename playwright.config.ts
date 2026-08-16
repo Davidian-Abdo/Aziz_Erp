@@ -1,4 +1,17 @@
 import { defineConfig, devices } from '@playwright/test'
+import { loadEnv } from 'vite'
+
+/*
+ * `.env` reaches the specs through the same loader that builds the bundle.
+ *
+ * `vite preview` serves a build that baked `VITE_SUPABASE_URL` in; the specs
+ * need the identical value to do their housekeeping deletes over PostgREST.
+ * Reading it here means there is one source of that project reference instead
+ * of a literal pasted into each spec — a copy that cannot follow `.env`, and
+ * therefore one that eventually deletes rows out of a project the app under
+ * test is not even talking to.
+ */
+Object.assign(process.env, loadEnv('production', process.cwd(), 'VITE_'))
 
 /*
  * Flow tests (plan §5.1, Phase 4 exit criterion).

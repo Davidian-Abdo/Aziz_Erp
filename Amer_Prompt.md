@@ -113,7 +113,7 @@ npm run verify   # lint + format + tsc + vitest — the everyday gate
 npm run build    # must stay green; it is what Cloudflare Pages will run
 npm run test:e2e # Playwright — YOURS. See below
 npm run db:up    # local Postgres container; needs Docker + a bash shell
-npm run db:test  # the pgTAP suite (275 assertions)
+npm run db:test  # the pgTAP suite (296 assertions across 14 files)
 ```
 
 Remote mode exists for the Supabase project — `SUPABASE_DB_URL=… ./scripts/db.sh
@@ -128,15 +128,21 @@ Start Docker Desktop first, then:
 
 ```bash
 npm run db:up    # start the aziz_erp_pg container (port 5434)
-npm run db:test  # 275 pgTAP assertions
+npm run db:test  # 296 pgTAP assertions
 ```
+
+⚠ **Run it against the local container, never against a project that has
+traded.** Every fixture asserts absolute figures and most begin by clearing the
+categories, which the `purchase` foreign key refuses once purchases exist. A
+suite that goes red for a reason unrelated to correctness is a suite people stop
+reading. `scripts/restore-rehearse.sh` is the other legitimate target.
 
 Phases whose exit criterion is a pgTAP suite run must be closed here, in this
 entry — do not defer them to Hmdnah.
 
-**You can run the browser tests, and nobody ever has.** `npm run test:e2e` needs
-`npx playwright install chromium` once, and then three things the repo cannot
-give you:
+**You can run the browser tests, and nobody has run them since Phase 8.**
+`npm run test:e2e` needs `npx playwright install chromium` once, and then three
+things the repo cannot give you:
 
 - **`.env`.** It is gitignored and does **not** travel with a pull. You need
   `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for the **dev** project from
@@ -147,9 +153,18 @@ give you:
   in which every screen is empty — that is the intended behaviour, not a bug you
   have found.
 - **The nerve to check which project you are pointed at before the first run.**
-  These tests write purchases and counts and do not clean up. In this model a
-  spurious purchase is reported as *profit*. `aziz-dev` is the target;
-  **`aziz-prod` never is, for any reason.**
+  These tests write purchases and counts, and clean up only their own marked
+  rows. In this model a spurious purchase is reported as *profit*. `aziz-dev` is
+  the target; **`aziz-prod` never is, for any reason.**
+
+**A durable rule for those specs: they select by translation KEY, never by a
+literal string.** `import { t } from './i18n'` and write `t('purchases.save')`.
+The reason is worth carrying: Phase 8 changed the running language to Arabic and
+every spec was matching hardcoded French, so the suite could not have passed from
+that commit onward — and nothing reported it, because `verify` does not run
+Playwright and no browser machine had run it since. A test suite that no machine
+can execute does not go red; it goes quiet. `tsconfig.e2e.json` now puts `e2e/`
+into `tsc -b` so at least the compiler reads what nobody can run.
 
 **And you can look at it.** No human or agent has seen this UI rendered. The
 dashboard in particular is a KPI grid, a table of eight columns and a chart, all

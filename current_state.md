@@ -26,6 +26,7 @@ measurement** (`docs/domain-spec.md` §7.2).
 | `docs/v1.0_impl_plan.md` | The build plan. **Normative where it contradicts the specs** |
 | `docs/plan_review.md` | Review of the plan, 2026-08-02, with 8 findings |
 | `docs/restore-runbook.md` | How to restore the books from a backup. Written 2026-08-11 |
+| `docs/deploy-runbook.md` | Owner-facing: `aziz-prod`, Cloudflare, every secret, in order. Written 2026-08-16 |
 | `Hmdnah_Prompt.md` | Session opening prompt for **Hmdnah**, on the Hetzner dev box |
 | `Amer_Prompt.md` | Session opening prompt for **Amer**, on the owner's Windows PC |
 
@@ -1716,7 +1717,7 @@ worse than a row that offers none — and the database now refuses it regardless
 the Arabic/RTL walk of every authenticated screen at 375 px that Entry 15 and 16
 already owed, and the new edit controls, which have never been seen at all.
 
-**Box:** `aziz_erp_pg` created on :5434 and **removed again** at the end of the
+**Box (Entry 17):** `aziz_erp_pg` created on :5434 and **removed again** at the end of the
 session; the named volume `aziz_erp_pg_data` is kept and port 5434 is free. The
 two scratch databases the rehearsal creates (`aziz_backup_src`,
 `aziz_restore_test`) are dropped by the script on exit. `npm install` added the
@@ -1732,3 +1733,243 @@ otherwise. No other project touched; `portfolio-caddy-1` and
 `beamstack-contact` untouched (§6a hard limit), as were `planitor-pg`,
 `chantier_test_pg`, `chantier_test_redis`, `mdo-dev-postgres-1`. §6 pause ladder
 never invoked — ~1.4–2.0 GiB available throughout.
+
+### Entry 18 — 2026-08-16 — Hmdnah, dev box — migrations 0013/0014 applied to aziz-dev; the Playwright suite was broken by Phase 8 and is rebuilt; deployment runbook
+
+**Three things, and the middle one is a finding: the two outstanding migrations
+are now on aziz-dev with the ledger updated, the entire Playwright suite could
+not have passed since Phase 8 and has been rebuilt to be language-proof, and the
+owner now has an ordered deployment runbook.** `npm run verify` green — **135
+tests across 16 files**, and `tsc -b` now compiles `e2e/` as well, which it never
+did before. `npm run build` clean. pgTAP **296 assertions across 14 files,
+green**, from a clean `db:reset` on the local container.
+
+**The owner supplied the aziz-dev database password this session** (the first
+attempt was the account password and was rejected; the second was the database
+password and worked). It was used from the shell only and **is not written to
+any file in this repo, to `.env`, or anywhere on this box.** The next session
+does not have it and must ask again.
+
+---
+
+#### 1. Migrations 0013 and 0014 are on aziz-dev
+
+Applied with `supabase db push --db-url` over the direct IPv6 host, which this
+box can reach. Using the CLI rather than the SQL editor matters for one reason:
+it wrote `supabase_migrations.schema_migrations`, so the project's ledger now
+reads `0001`…`0014` and a future `db push` knows what is already applied. The
+one-line manual `insert` that Entry 17 prepared for the SQL-editor route is no
+longer needed.
+
+Verified **on aziz-dev**, after the push:
+
+| Check | Result |
+|---|---|
+| Migration ledger | `0013 arabic_categories`, `0014 edit_rpcs` recorded |
+| `app_settings.locale` | `ar-MA` (was `fr`) |
+| Category names | Arabic — `مشروبات`, `منتجات الألبان`, … and the charge categories too |
+| `edit_purchase` | exists |
+| `stock_count_embedded_coherent` | exists, `tgdeferrable = t`, `tginitdeferred = t` |
+| `anon` EXECUTE on public functions | **0** — the revoke sweep at the end of 0014 held |
+| `authenticated` EXECUTE on `edit_purchase` | `t` |
+| RLS | on all 12 tables, 0 without |
+
+**The one-sided guard was then proved fixed on aziz-dev itself**, inside a
+transaction that was rolled back. The exact UPDATE from Entry 17 —
+`update stock_count set occurred_on = … where id = <embedded>` — is now refused:
+
+```
+ERROR: this count belongs to a purchase and must move with it
+       (purchase is 139862a6… on 2026-08-09, count is 139862a6… on 2026-08-01)
+HINT:  Edit the purchase itself; edit_purchase() moves both rows together.
+```
+
+and a standalone count still moves freely, which is the half that proves the
+guard did not simply freeze the table. ⚠ **The first attempt at that second
+check failed on `stock_count_one_standalone_per_day`** — a date I picked, not the
+guard — which is exactly how a test proves the wrong thing if nobody reads the
+error. Re-run against a date that was certainly free: passed.
+
+**Before applying anything I checked whether the defect had already been
+exercised on aziz-dev**: zero incoherent purchase/count pairs, zero orphaned
+embedded counts. The project was clean, so nothing had to be repaired. Worth
+doing before the guard goes on, not after — a constraint trigger validates
+nothing retroactively, so pre-existing corruption would simply have been frozen
+in place and would have looked like correct data forever.
+
+**aziz-dev is unchanged apart from the two migrations**: 18 purchases and 47
+counts before and after, minimum count date still 2026-01-01.
+
+**⚠ Public signup is STILL enabled on aziz-dev** (`disable_signup: false`,
+re-checked over the network today). **Seventh consecutive entry.** The owner
+chose this session to fix it in the dashboard rather than have a CI guard built
+for it, so it is still owed.
+
+---
+
+#### 2. ⚠ THE FINDING: Phase 8 silently broke the entire Playwright suite
+
+`src/i18n/index.ts` has said `lng: 'ar'` since Entry 15. All three specs in
+`e2e/` selected by hardcoded French — `getByLabel('Rayon')`,
+`getByRole('button', { name: 'Suivant' })`, `toHaveText('Achat enregistré.')`.
+**From commit `ed316fc` onward the suite could not have passed against the built
+application**, and every selector in it would have timed out.
+
+**Nothing reported this, and the reason is structural rather than careless.**
+`npm run verify` does not run Playwright. The dev box cannot run it at all. The
+one machine that can had last run it in Entry 9, before Phase 8 existed. Three
+subsequent entries — 15, 16 and 17 — each recorded the specs as *written and not
+executed*, which was true, and which is precisely why the breakage was invisible:
+**a suite that no machine executes does not go red. It goes quiet, and quiet
+reads the same as fine.**
+
+Two mechanisms now stand against a repeat:
+
+- **`e2e/i18n.ts`** — specs name a translation **key** and it resolves the string
+  the way i18next will at runtime (active language, French as `fallbackLng`).
+  Change the language again and the specs follow. Delete a key and they throw
+  *here*, naming the key, instead of timing out on a selector matching nothing.
+  It deliberately does not boot i18next: lookup, fallback and interpolation are
+  twenty lines, against importing the app's whole i18n init to read two plain
+  objects.
+- **`tsconfig.e2e.json`** — ⚠ **`e2e/` was outside every tsconfig project and
+  `tsc -b` had never once looked at a spec.** `e2e/README.md` claimed the specs
+  "can be written and type-checked here"; only ESLint was ever reading them. It
+  is now a third referenced project, so `npm run verify` compiles the specs on
+  the box that cannot run them. **Proved by deliberately breaking a type and
+  watching `tsc -b` name the file and line**, then reverting — a build gate
+  asserted rather than assumed, since one that silently checks nothing is the
+  failure being fixed.
+
+All three existing specs are rewritten against keys. Behaviour is unchanged;
+only the selectors moved.
+
+**A second thing fixed while in there.** The project ref and the anon key were
+pasted **literally** into three specs for their housekeeping deletes. That is a
+copy that cannot follow `.env`: point the app at another project and the specs
+keep deleting rows out of the first one, with every assertion still green. They
+now come from `.env` through Vite's own `loadEnv` in `playwright.config.ts` — the
+same value the bundle under test was built with — via a shared `deleteRows()`
+in `fixtures.ts`, which also **throws on a failed delete** instead of swallowing
+it. A silent cleanup failure is how the *next* assertion becomes a confusing
+failure three tests later.
+
+⚠ **`scripts/fix-*.mjs` are now a hazard.** Entry 9 committed three one-shot
+codemods as a record of a tool-encoding workaround; they rewrite the specs to
+their pre-Arabic French text. Running one would undo this entry. Flagged in
+`e2e/README.md` rather than deleted — they are another agent's deliberate
+artefact and the call to remove them is not mine. The encoding corruption they
+guarded against is now caught by `tsc -b` anyway.
+
+---
+
+#### 3. `e2e/edit.spec.ts` — Phase 9 in a browser
+
+Six tests, written here, **not run** (no browser on this box). They cover what
+the component suite structurally cannot: an edit is the one operation in this
+application that can become a *second write of the same money*, and only a real
+HTTP path against a real ledger can show that the row count did not move.
+
+| Test | The property |
+|---|---|
+| A corrected charge replaces the figure | One row at the new amount, **zero** at the old — an edit that posted instead of replacing shows up here and nowhere else |
+| Cancelling an edit | Record untouched, and the form is not left prefilled — a prefilled form is a correction waiting to be saved by whoever returns to the screen |
+| Editing a purchase without moving it | ⚠ The Entry 17 client defect: the form must still **ask** the §3.2A question, because the "last count" it compares against is the purchase's own embedded one |
+| Pulled behind the last count | Gives up its embedded count; the row then says *no count attached* |
+| Pushed forward | Acquires the count it now needs — the §3.2A boundary crossed the other way, over the real RPC |
+| An embedded count | Offers neither Edit nor Delete on the counts screen, **while a standalone count still offers both** — so the assertion is about that row and not about a screen that lost its buttons |
+
+The forward-crossing test takes today's date from the form's own *"Today"*
+button rather than the runner's clock: the shop is UTC+1 and `toISOString()`
+writes yesterday for an hour every night.
+
+---
+
+#### 4. `docs/deploy-runbook.md`
+
+The owner's remaining work was scattered across five entries and four workflow
+headers. It is now one ordered document, from creating `aziz-prod` to ticking
+plan §1.3, with a **Check** after every step that does not rely on the next step
+failing.
+
+Three things in it are worth naming here because they are traps rather than
+instructions:
+
+- **⚠ `deploy.yml` reads `vars.PROD_SUPABASE_URL` / `vars.PROD_SUPABASE_ANON_KEY`
+  (repository *Variables*) while `keepalive.yml` reads
+  `secrets.PROD_SUPABASE_URL` / `secrets.PROD_SUPABASE_ANON_KEY` (repository
+  *Secrets*).** Same two names, two different stores, two different screens in
+  the GitHub UI. Setting one and not the other gives the other workflow an empty
+  string — the build then ships a bundle pointing at `undefined`, which fails at
+  runtime as a network error rather than as a configuration error. Both workflow
+  headers are individually correct and the collision is only visible if you read
+  them side by side, which is what writing the runbook forced.
+- **The allowlist bootstrap** (`plan_review` R2) gets its own ⚠ section, because
+  it is the failure that produces a working application in which every screen is
+  empty and no error appears anywhere. The owner will meet it twice — once here,
+  once in `restore-runbook.md` §3.
+- **The pooler-versus-direct-host trap and the passphrase rule** are carried over
+  from Entry 17 into the place the owner will actually be reading.
+
+---
+
+**Verified, and on what.**
+
+- **`npm run verify`** — lint, format, `tsc -b` (**now including `e2e/`**), **135
+  Vitest tests, green**. Unchanged count: this session added no component tests,
+  only browser specs, which Vitest does not run.
+- **`npm run db:test`** — **296 pgTAP assertions across 14 files, green**, on the
+  local container from a clean `db:reset`, migrations `0001`–`0014` replayed from
+  empty.
+- **`npm run build`** — clean. The 500 kB chunk warning is pre-existing from
+  Phase 5.
+- **aziz-dev** — migrations applied and the eight checks in §1 above run against
+  the project itself; the coherence guard proved in both directions, rolled back.
+- **⚠ pgTAP was deliberately NOT run against aziz-dev.** It has traded — 18
+  purchases — and §3 of this document says why the suite would report failures
+  over arithmetic that is entirely correct. This is the first session where that
+  warning applied to a real decision rather than a hypothetical one.
+
+**Not verified.**
+
+- **No browser has rendered anything.** The six new edit specs, the three
+  rewritten ones, the Arabic/RTL layout, and the Phase 9 edit controls are all
+  unexecuted and unseen. **The rewritten specs are typechecked, not run** — that
+  is a weaker claim than it looks, and this entry exists partly because the
+  previous version of them typechecked too.
+- **No workflow has run in CI.** Deploy, Migrate, Keepalive and Backup remain
+  owner-side and untested.
+- **`aziz-prod` does not exist.**
+
+**Owner action items, in order.**
+
+1. **Disable public signup on aziz-dev.** Seventh entry. One dashboard toggle;
+   the verification command is in `deploy-runbook.md` §2.
+2. **Follow `docs/deploy-runbook.md` from §1.** It is written to be worked
+   through in order and each step says how to know it worked.
+3. Give Amer `.env` (dev URL + anon key) and `E2E_EMAIL` / `E2E_PASSWORD` for an
+   allowlisted dev user, so the suite can finally be run.
+
+**Next for Amer — and it is now three things, in this order.**
+
+1. **Run `npm run test:e2e`.** It has not been executed since Entry 9, and the
+   selectors it will exercise have never been run in any form. Expect failures
+   that are mine, not the application's: report them as spec defects and fix them
+   in place. **Do not delete a spec to make the suite green.**
+2. **The Arabic/RTL visual walk** of every authenticated screen at 375 px, owed
+   since Entry 15. aziz-dev now genuinely serves Arabic categories and `ar-MA`
+   formatting, so this walk finally shows what the owner will see.
+3. **Look at the Phase 9 edit controls.** Every recent row gained a *Modifier*
+   link beside its Delete, so on a phone that row now carries a category name, a
+   date, an amount and two text buttons. Nothing has looked at it.
+
+**Box:** `aziz_erp_pg` recreated on :5434 for the pgTAP run and **left running**
+— unlike Entry 17, which removed it. Removing it is a one-command teardown
+(`docker rm -f aziz_erp_pg`) and the named volume `aziz_erp_pg_data` is kept
+either way; it is left up because the next session on this box will want it and
+memory was never tight (≈1.2 GiB available throughout, 512 MB cap on the
+container). If another project needs the room, take it down. No other project
+touched; `portfolio-caddy-1` and `beamstack-contact` untouched and up (§6a hard
+limit), as were `planitor-pg`, `chantier_test_pg`, `chantier_test_redis`,
+`mdo-dev-postgres-1`. §6 pause ladder never invoked. `package-lock.json`
+untouched this session — no `npm install` was needed.

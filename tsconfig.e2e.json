@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode, as the app project — the specs import from `src/`. */
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  /*
+   * ⚠ Until 2026-08-16 this project did not exist, and `e2e/` therefore sat
+   * outside every tsconfig: `tsc -b` had never once looked at a Playwright spec.
+   * That is a gap with teeth on this repo specifically. The specs cannot be RUN
+   * on the Hetzner box (no browser), so a compile error was the only signal
+   * available there — and `npm run verify` was reporting green over specs it was
+   * not reading. `e2e/README.md` said the specs "can be written and
+   * type-checked here"; only the second half was ever true, and only through
+   * ESLint.
+   *
+   * `DOM` is in `lib` because the specs run browser-side callbacks through
+   * `page.evaluate`, which really do touch `localStorage`.
+   */
+  "include": ["e2e", "playwright.config.ts"]
+}

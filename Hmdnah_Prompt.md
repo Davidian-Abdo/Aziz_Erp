@@ -93,9 +93,15 @@ not renegotiated at the end.
 npm run verify   # lint + format + tsc + vitest — the everyday gate
 npm run build    # must stay green; it is what Cloudflare Pages will run
 npm run db:up    # recreates the local container from the kept volume
-npm run db:test  # the pgTAP suite (275 assertions)
+npm run db:test  # the pgTAP suite (296 assertions across 14 files)
 npm run test:e2e # Playwright — needs a browser THIS BOX DOES NOT HAVE
 ```
+
+⚠ **Run pgTAP against the local container, never against a project that has
+traded.** Every fixture asserts absolute figures and most begin by clearing the
+categories, which the `purchase` foreign key refuses once purchases exist. A
+suite that goes red for a reason unrelated to correctness is a suite people stop
+reading. `scripts/restore-rehearse.sh` is the other legitimate target.
 
 Remote mode exists for the Supabase project — `SUPABASE_DB_URL=… ./scripts/db.sh
 test` — and `reset` is refused there on purpose.
@@ -103,9 +109,13 @@ test` — and `reset` is refused there on purpose.
 ## What this box cannot do
 
 - **No browser.** No Chromium build exists for its Ubuntu 26.04 and there is no
-  system Chrome. Playwright specs can be written and type-checked here; they
-  cannot be run. **Never report an unexecuted spec as passing, and never delete
-  one to make a checklist green.**
+  system Chrome. Playwright specs can be written and type-checked here —
+  `tsconfig.e2e.json` puts `e2e/` into `tsc -b`, so the compiler reads what this
+  box cannot run — but they cannot be executed. **Never report an unexecuted spec
+  as passing, and never delete one to make a checklist green.** A spec that
+  compiles here has been proved to compile and nothing else: Phase 8 changed the
+  UI language out from under three specs that still looked perfectly correct.
+  **Select by translation key (`e2e/i18n.ts`), never by a literal string.**
 - **`supabase start` is far too heavy** for 3.7 GiB. The local container is bare
   Postgres — no PostgREST, no GoTrue — so anything HTTP-shaped needs the real
   project.
